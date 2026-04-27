@@ -22,14 +22,13 @@ import {
   Tooltip,
   Upload,
   message,
-  Radio,
 } from 'antd';
 import type { TableProps, UploadFile } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { mockProductionPlans } from '@/mocks/data';
 import { productionPlanDetailPath } from '@/constants/routes';
-import type { PlanChangeType, ProductionPlan, ProductionPlanStatus } from '@/types';
+import type { ProductionPlan, ProductionPlanStatus } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -67,9 +66,6 @@ export function ProductionPlanList() {
   const [newPlanModalOpen, setNewPlanModalOpen] = useState(false);
   const [editPlanModalOpen, setEditPlanModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string>('');
-  const [changeModalOpen, setChangeModalOpen] = useState(false);
-  const [targetPlanId, setTargetPlanId] = useState<string>('');
-  const [changeType, setChangeType] = useState<PlanChangeType>('software_update');
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [editUploadFiles, setEditUploadFiles] = useState<UploadFile[]>([]);
   const [newPlanForm] = Form.useForm<NewPlanFormValues>();
@@ -117,9 +113,10 @@ export function ProductionPlanList() {
   };
 
   const handleOpenChange = (planId: string) => {
-    setTargetPlanId(planId);
-    setChangeType('software_update');
-    setChangeModalOpen(true);
+    const query = new URLSearchParams({
+      mode: 'changeEdit',
+    }).toString();
+    navigate(`${productionPlanDetailPath(planId)}?${query}`);
   };
 
   const handleOpenEdit = (plan: ProductionPlan) => {
@@ -156,18 +153,6 @@ export function ProductionPlanList() {
       );
       message.success({ content: '重新匹配成功，状态已更新为待确认', key: `refresh-${plan.id}` });
     }, 800);
-  };
-
-  const handleConfirmChange = () => {
-    if (!targetPlanId) {
-      setChangeModalOpen(false);
-      return;
-    }
-    const query = new URLSearchParams({
-      mode: 'changeEdit',
-      changeType,
-    }).toString();
-    navigate(`${productionPlanDetailPath(targetPlanId)}?${query}`);
   };
 
   const handleCreatePlan = async () => {
@@ -418,24 +403,6 @@ export function ProductionPlanList() {
             </Upload>
           </Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        title="计划变更"
-        open={changeModalOpen}
-        onCancel={() => setChangeModalOpen(false)}
-        onOk={handleConfirmChange}
-        okText="确认"
-        cancelText="取消"
-      >
-        <Radio.Group
-          value={changeType}
-          onChange={(e) => setChangeType(e.target.value as PlanChangeType)}
-          options={[
-            { label: '软件更新', value: 'software_update' },
-            { label: '软件下架', value: 'software_offline' },
-          ]}
-        />
       </Modal>
 
       <Modal

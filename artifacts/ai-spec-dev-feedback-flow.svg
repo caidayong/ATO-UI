@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2200" viewBox="0 0 1600 2200">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d4ed8"/>
+    </marker>
+    <marker id="arrow-small" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-feedback" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f766e"/>
+    </marker>
+    <style>
+      .title { font: 700 46px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 22px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #475569; }
+      .phase-title { font: 700 32px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #0f172a; }
+      .phase-tag { font: 700 20px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #0f172a; }
+      .text { font: 500 24px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #0f172a; }
+      .text-small { font: 500 20px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #334155; }
+      .review-label { font: 500 16px "Microsoft YaHei", "PingFang SC", sans-serif; fill: #6d28d9; }
+      .phase-1 { fill: #eff6ff; stroke: #60a5fa; stroke-width: 2.4; rx: 24; }
+      .phase-2 { fill: #f0fdf4; stroke: #4ade80; stroke-width: 2.4; rx: 24; }
+      .phase-3 { fill: #fefce8; stroke: #facc15; stroke-width: 2.4; rx: 24; }
+      .phase-4 { fill: #fff7ed; stroke: #fb923c; stroke-width: 2.4; rx: 24; }
+      .ops { fill: #f5f3ff; stroke: #a78bfa; stroke-width: 2.4; rx: 24; }
+      .step { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.8; rx: 14; }
+      .io { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.8; rx: 14; }
+      .flow { stroke: #1d4ed8; stroke-width: 3.6; fill: none; marker-end: url(#arrow); }
+      .phase-flow { stroke: #7c3aed; stroke-width: 2.2; stroke-dasharray: 8 6; fill: none; marker-end: url(#arrow-small); }
+      .feedback { stroke: #0f766e; stroke-width: 4; fill: none; marker-end: url(#arrow-feedback); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="2200" fill="#ffffff"/>
+  <text x="800" y="78" text-anchor="middle" class="title">AI-spec 开发与反哺流程图</text>
+  <text x="800" y="116" text-anchor="middle" class="subtitle">自上而下流程 | 四阶段清晰区分 | 升级上线反哺下一迭代</text>
+
+  <!-- 阶段1：需求设计 -->
+  <rect class="phase-1" x="120" y="170" width="1360" height="360"/>
+  <rect x="145" y="196" width="220" height="44" rx="10" fill="#bfdbfe"/>
+  <text x="255" y="226" text-anchor="middle" class="phase-tag">阶段一</text>
+  <text x="430" y="226" class="phase-title">需求设计阶段</text>
+
+  <rect class="io" x="180" y="265" width="1240" height="62"/>
+  <text x="800" y="305" text-anchor="middle" class="text">输入：迭代需求清单</text>
+
+  <rect class="step" x="180" y="350" width="260" height="88"/>
+  <text x="310" y="404" text-anchor="middle" class="text">AI进行原型页面设计</text>
+  <rect class="step" x="490" y="350" width="200" height="88"/>
+  <text x="590" y="404" text-anchor="middle" class="text">页面开发</text>
+  <rect class="step" x="760" y="350" width="280" height="88"/>
+  <text x="900" y="404" text-anchor="middle" class="text">AI生成迭代PRD文档</text>
+  <rect class="step" x="1090" y="350" width="280" height="88"/>
+  <text x="1230" y="404" text-anchor="middle" class="text">合并至全量文档</text>
+
+  <!-- 阶段2：编码设计 -->
+  <rect class="phase-2" x="120" y="580" width="1360" height="300"/>
+  <rect x="145" y="606" width="220" height="44" rx="10" fill="#bbf7d0"/>
+  <text x="255" y="636" text-anchor="middle" class="phase-tag">阶段二</text>
+  <text x="430" y="636" class="phase-title">编码设计阶段</text>
+
+  <rect class="io" x="180" y="675" width="1240" height="62"/>
+  <text x="800" y="715" text-anchor="middle" class="text">输入：迭代需求清单 / 迭代PRD文档 / 迭代HTML原型图</text>
+
+  <rect class="step" x="180" y="760" width="360" height="88"/>
+  <text x="360" y="814" text-anchor="middle" class="text">AI生成需求概要设计</text>
+  <rect class="step" x="620" y="760" width="360" height="88"/>
+  <text x="800" y="814" text-anchor="middle" class="text">AI进行需求详细设计</text>
+  <rect class="step" x="1060" y="760" width="360" height="88"/>
+  <text x="1240" y="814" text-anchor="middle" class="text">AI拆分落地执行计划</text>
+
+  <!-- 阶段3：编码实施 -->
+  <rect class="phase-3" x="120" y="930" width="1360" height="250"/>
+  <rect x="145" y="956" width="220" height="44" rx="10" fill="#fde68a"/>
+  <text x="255" y="986" text-anchor="middle" class="phase-tag">阶段三</text>
+  <text x="430" y="986" class="phase-title">编码实施阶段</text>
+
+  <rect class="step" x="350" y="1045" width="420" height="92"/>
+  <text x="560" y="1101" text-anchor="middle" class="text">AI按计划编码</text>
+  <rect class="step" x="830" y="1045" width="420" height="92"/>
+  <text x="1040" y="1101" text-anchor="middle" class="text">AI代码审核</text>
+
+  <!-- 阶段4：验证 -->
+  <rect class="phase-4" x="120" y="1230" width="1360" height="300"/>
+  <rect x="145" y="1256" width="220" height="44" rx="10" fill="#fdba74"/>
+  <text x="255" y="1286" text-anchor="middle" class="phase-tag">阶段四</text>
+  <text x="430" y="1286" class="phase-title">验证阶段</text>
+
+  <rect class="step" x="280" y="1360" width="480" height="88"/>
+  <text x="520" y="1414" text-anchor="middle" class="text">AI单元测试</text>
+  <rect class="step" x="840" y="1360" width="480" height="88"/>
+  <text x="1080" y="1414" text-anchor="middle" class="text">输出测试报告</text>
+
+  <!-- 升级上线 -->
+  <rect class="ops" x="300" y="1600" width="1000" height="240"/>
+  <text x="800" y="1660" text-anchor="middle" class="phase-title">升级上线</text>
+  <rect class="step" x="400" y="1690" width="340" height="90"/>
+  <text x="570" y="1746" text-anchor="middle" class="text">需求验收</text>
+  <rect class="step" x="860" y="1690" width="340" height="90"/>
+  <text x="1030" y="1746" text-anchor="middle" class="text">问题反馈与优化建议</text>
+  <rect class="io" x="640" y="1790" width="320" height="44"/>
+  <text x="800" y="1819" text-anchor="middle" class="text-small">提交RDMS问题单（用于反哺）</text>
+
+  <!-- 各阶段内子流程箭头 -->
+  <path class="phase-flow" d="M 440 394 L 490 394"/>
+  <text x="465" y="382" text-anchor="middle" class="review-label">人工审核</text>
+  <path class="phase-flow" d="M 690 394 L 760 394"/>
+  <text x="725" y="382" text-anchor="middle" class="review-label">人工审核</text>
+  <path class="phase-flow" d="M 1040 394 L 1090 394"/>
+  <text x="1065" y="382" text-anchor="middle" class="review-label">人工审核</text>
+
+  <path class="phase-flow" d="M 540 804 L 620 804"/>
+  <text x="580" y="792" text-anchor="middle" class="review-label">人工审核</text>
+  <path class="phase-flow" d="M 980 804 L 1060 804"/>
+  <text x="1020" y="792" text-anchor="middle" class="review-label">人工审核</text>
+
+  <path class="phase-flow" d="M 770 1091 L 830 1091"/>
+
+  <path class="phase-flow" d="M 760 1404 L 840 1404"/>
+
+  <path class="phase-flow" d="M 740 1735 L 860 1735"/>
+  <path class="phase-flow" d="M 570 1780 L 720 1790"/>
+  <path class="phase-flow" d="M 1030 1780 L 880 1790"/>
+
+  <!-- 主流程箭头：上到下 -->
+  <path class="flow" d="M 800 530 L 800 580"/>
+  <path class="flow" d="M 800 880 L 800 930"/>
+  <path class="flow" d="M 800 1180 L 800 1230"/>
+  <path class="flow" d="M 800 1530 L 800 1600"/>
+
+  <!-- 反哺箭头 -->
+  <path class="feedback" d="M 300 1720 L 20 1720 L 20 300 L 180 300"/>
+  <path class="feedback" d="M 300 1760 L 50 1760 L 50 710 L 180 710"/>
+  <text x="24" y="1040" transform="rotate(-90 24 1040)" text-anchor="middle" class="text-small" fill="#0f766e">线上问题反馈反哺需求与设计</text>
+</svg>

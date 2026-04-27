@@ -19,6 +19,7 @@ import {
   Tag,
   message,
   Select,
+  Divider,
 } from 'antd';
 import type { TableProps } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SwapOutlined } from '@ant-design/icons';
@@ -27,10 +28,32 @@ import type { ResumeRecord } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 10;
 
-type ResumeFormValues = Omit<ResumeRecord, 'id' | 'checksumMd5'>;
+type ResumeIcPair = {
+  chipPartNo?: string;
+  chipModel?: string;
+  softwareVersion?: string;
+  checksumMd5?: string;
+  softwareStatus?: '正常' | '已下架';
+  description?: string;
+  publisher?: string;
+  remark?: string;
+};
+type ResumeFormValues = Omit<ResumeRecord, 'id' | 'checksumMd5' | 'chipPartNo' | 'chipModel'> & {
+  chipPartNo?: string;
+  chipModel?: string;
+  icInfos?: ResumeIcPair[];
+};
 type BatchReplaceFormValues = {
-  field: keyof ResumeFormValues;
-  value: string;
+  findSoftwareVersion: string;
+  findChecksumMd5?: string;
+  findPath?: string;
+  replaceSoftwareVersion: string;
+  replaceChecksumMd5: string;
+  replacePath: string;
+};
+type ResumeBoardRow = ResumeRecord & {
+  groupIds: string[];
+  icInfos: ResumeIcPair[];
 };
 
 export function ResumeManagement() {
@@ -42,61 +65,139 @@ export function ResumeManagement() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingGroupIds, setEditingGroupIds] = useState<string[]>([]);
   const [editForm] = Form.useForm<ResumeFormValues>();
   const [batchForm] = Form.useForm<BatchReplaceFormValues>();
+  const buildChecksum = (softwareVersion?: string) =>
+    softwareVersion?.trim() ? Math.random().toString(16).slice(2, 13) : '';
+  const lookupSoftwareMeta = (softwareVersion?: string): { checksumMd5?: string; path?: string } => {
+    const target = softwareVersion?.trim();
+    if (!target) {
+      return {};
+    }
+    for (const record of records) {
+      const infos = record.icInfos?.length
+        ? record.icInfos
+        : [
+            {
+              softwareVersion: record.softwareVersion,
+              checksumMd5: record.checksumMd5,
+              description: record.description,
+            },
+          ];
+      const matched = infos.find((info) => info.softwareVersion?.trim() === target);
+      if (matched) {
+        return {
+          checksumMd5: matched.checksumMd5,
+          path: matched.description,
+        };
+      }
+    }
+    return {};
+  };
+
+  const groupedRecords = useMemo<ResumeBoardRow[]>(() => {
+    const groupMap = new Map<string, ResumeBoardRow>();
+    records.forEach((item) => {
+      const key = `${item.boardPartNo ?? ''}|${item.boardModel}`;
+      const normalizedInfos: ResumeIcPair[] = item.icInfos?.length
+        ? item.icInfos
+        : [
+            {
+              chipPartNo: item.chipPartNo,
+              chipModel: item.chipModel,
+              softwareVersion: item.softwareVersion,
+              checksumMd5: item.checksumMd5,
+              softwareStatus: item.softwareStatus,
+              description: item.description,
+              publisher: item.publisher,
+              remark: item.remark,
+            },
+          ];
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          ...item,
+          groupIds: [item.id],
+          icInfos: [...normalizedInfos],
+        });
+        return;
+      }
+      const grouped = groupMap.get(key)!;
+      grouped.groupIds.push(item.id);
+      grouped.icInfos.push(...normalizedInfos);
+    });
+    return Array.from(groupMap.values());
+  }, [records]);
 
   const filteredRecords = useMemo(() => {
     const target = keyword.trim().toLowerCase();
     if (!target) {
-      return records;
+      return groupedRecords;
     }
-    return records.filter((item) =>
+    return groupedRecords.filter((item) =>
       [
-        item.boardPartNo,
+        item.boardPartNo ?? '',
         item.boardModel,
-        item.chipPartNo,
-        item.chipModel,
-        item.softwareVersion,
-        item.publisher,
-        item.remark ?? '',
-        item.description ?? '',
+        ...item.icInfos.flatMap((info) => [
+          info.chipPartNo ?? '',
+          info.chipModel ?? '',
+          info.softwareVersion ?? '',
+          info.softwareStatus ?? '',
+          info.description ?? '',
+          info.publisher ?? '',
+          info.remark ?? '',
+        ]),
       ].some((field) => field.toLowerCase().includes(target))
     );
-  }, [keyword, records]);
+  }, [groupedRecords, keyword]);
 
   const pagedRecords = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredRecords.slice(start, start + pageSize);
   }, [filteredRecords, page, pageSize]);
 
+  const getIcInfos = (record: ResumeBoardRow): ResumeIcPair[] => record.icInfos ?? [];
+  const renderIcCellLines = (record: ResumeBoardRow, pick: (info: ResumeIcPair) => string | undefined) =>
+    getIcInfos(record).map((info, index, arr) => (
+      <div
+        key={`${record.id}-line-${index}`}
+        style={{
+          padding: '4px 0',
+          borderBottom: index === arr.length - 1 ? 'none' : '1px solid #f0f0f0',
+        }}
+      >
+        {pick(info) || '-'}
+      </div>
+    ));
+
   const handleOpenAdd = () => {
     setEditingId(null);
+    setEditingGroupIds([]);
     editForm.resetFields();
-    setEditModalOpen(true);
-  };
-
-  const handleOpenEdit = (record: ResumeRecord) => {
-    setEditingId(record.id);
     editForm.setFieldsValue({
-      boardPartNo: record.boardPartNo,
-      boardModel: record.boardModel,
-      chipPartNo: record.chipPartNo,
-      chipModel: record.chipModel,
-      softwareVersion: record.softwareVersion,
-      description: record.description,
-      publisher: record.publisher,
-      remark: record.remark,
+      icInfos: [{ chipPartNo: '', chipModel: '', softwareStatus: '正常' }],
     });
     setEditModalOpen(true);
   };
 
-  const handleDelete = (record: ResumeRecord) => {
+  const handleOpenEdit = (record: ResumeBoardRow) => {
+    setEditingId(record.id);
+    setEditingGroupIds(record.groupIds);
+    editForm.setFieldsValue({
+      boardPartNo: record.boardPartNo,
+      boardModel: record.boardModel,
+      icInfos: getIcInfos(record),
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleDelete = (record: ResumeBoardRow) => {
     Modal.confirm({
       title: '删除履历记录',
       content: '此操作不可恢复，是否继续？',
       okButtonProps: { danger: true },
       onOk: () => {
-        setRecords((prev) => prev.filter((item) => item.id !== record.id));
+        setRecords((prev) => prev.filter((item) => !record.groupIds.includes(item.id)));
         setSelectedRowKeys((prev) => prev.filter((key) => key !== record.id));
         message.success('删除成功');
       },
@@ -106,26 +207,52 @@ export function ResumeManagement() {
   const handleSubmitEdit = async () => {
     const values = await editForm.validateFields();
     if (editingId) {
-      setRecords((prev) =>
-        prev.map((item) =>
-          item.id === editingId
-            ? {
-                ...item,
-                ...values,
-              }
-            : item
-        )
-      );
+      const icInfos = values.icInfos?.length ? values.icInfos : [{}];
+      setRecords((prev) => {
+        const replacementRows: ResumeRecord[] = icInfos.map((info, index) => ({
+          id: editingGroupIds[index] ?? `RS-${Date.now()}-${index}`,
+          boardPartNo: values.boardPartNo,
+          boardModel: values.boardModel,
+          chipPartNo: info.chipPartNo?.trim() ?? '',
+          chipModel: info.chipModel?.trim() ?? '',
+          softwareVersion: info.softwareVersion?.trim() ?? '',
+          checksumMd5: info.checksumMd5 || buildChecksum(info.softwareVersion),
+          softwareStatus: info.softwareStatus,
+          description: info.description,
+          publisher: info.publisher?.trim() ?? '',
+          remark: info.remark,
+          icInfos: [
+            {
+              ...info,
+              checksumMd5: info.checksumMd5 || buildChecksum(info.softwareVersion),
+            },
+          ],
+        }));
+        return [...prev.filter((item) => !editingGroupIds.includes(item.id)), ...replacementRows];
+      });
       message.success('编辑成功');
     } else {
-      const nextId = `RS-${Date.now()}`;
+      const icInfos = values.icInfos?.length ? values.icInfos : [{}];
+      const firstInfo = icInfos[0] ?? {};
       const newRecord: ResumeRecord = {
-        id: nextId,
-        ...values,
-        checksumMd5: Math.random().toString(16).slice(2, 13),
+        id: `RS-${Date.now()}`,
+        boardPartNo: values.boardPartNo,
+        boardModel: values.boardModel,
+        chipPartNo: firstInfo.chipPartNo?.trim() ?? '',
+        chipModel: firstInfo.chipModel?.trim() ?? '',
+        softwareVersion: firstInfo.softwareVersion?.trim() ?? '',
+        checksumMd5: firstInfo.checksumMd5 || buildChecksum(firstInfo.softwareVersion),
+        softwareStatus: firstInfo.softwareStatus,
+        description: firstInfo.description,
+        publisher: firstInfo.publisher?.trim() ?? '',
+        remark: firstInfo.remark,
+        icInfos: icInfos.map((info) => ({
+          ...info,
+          checksumMd5: info.checksumMd5 || buildChecksum(info.softwareVersion),
+        })),
       };
       setRecords((prev) => [newRecord, ...prev]);
-      message.success('新增成功');
+      message.success(`新增成功（1个板卡，${icInfos.length}组IC信息）`);
     }
     setEditModalOpen(false);
     editForm.resetFields();
@@ -137,37 +264,132 @@ export function ResumeManagement() {
       return;
     }
     const values = await batchForm.validateFields();
+    const targetIds = new Set<string>(
+      filteredRecords
+        .filter((row) => selectedRowKeys.includes(row.id))
+        .flatMap((row) => row.groupIds)
+    );
     setRecords((prev) =>
       prev.map((item) =>
-        selectedRowKeys.includes(item.id)
-          ? {
-              ...item,
-              [values.field]: values.value,
-            }
+        targetIds.has(item.id)
+          ? (() => {
+              const nextIcInfos = (item.icInfos?.length
+                ? item.icInfos
+                : [
+                    {
+                      chipPartNo: item.chipPartNo,
+                      chipModel: item.chipModel,
+                      softwareVersion: item.softwareVersion,
+                      checksumMd5: item.checksumMd5,
+                      softwareStatus: item.softwareStatus,
+                      description: item.description,
+                      publisher: item.publisher,
+                      remark: item.remark,
+                    },
+                  ]
+              ).map((info) =>
+                info.softwareVersion?.trim() === values.findSoftwareVersion.trim()
+                  ? {
+                      ...info,
+                      softwareVersion: values.replaceSoftwareVersion.trim(),
+                      checksumMd5: values.replaceChecksumMd5.trim(),
+                      description: values.replacePath.trim(),
+                    }
+                  : info
+              );
+              const first = nextIcInfos[0] ?? {};
+              return {
+                ...item,
+                softwareVersion: first.softwareVersion?.trim() ?? '',
+                checksumMd5: first.checksumMd5?.trim() ?? '',
+                description: first.description,
+                icInfos: nextIcInfos,
+              };
+            })()
           : item
       )
     );
     setBatchModalOpen(false);
     batchForm.resetFields();
-    message.success(`已完成 ${selectedRowKeys.length} 条记录批量替换`);
+    message.success(`已完成 ${selectedRowKeys.length} 个板卡的批量软件信息替换`);
   };
 
-  const columns: TableProps<ResumeRecord>['columns'] = [
-    { title: '板卡料号', dataIndex: 'boardPartNo', key: 'boardPartNo', width: 150 },
-    { title: '板卡型号', dataIndex: 'boardModel', key: 'boardModel', width: 200 },
-    { title: '芯片料号', dataIndex: 'chipPartNo', key: 'chipPartNo', width: 180 },
-    { title: '芯片型号', dataIndex: 'chipModel', key: 'chipModel', width: 180 },
-    { title: '软件版本', dataIndex: 'softwareVersion', key: 'softwareVersion', width: 260 },
+  const columns: TableProps<ResumeBoardRow>['columns'] = [
     {
-      title: 'checksum值(MD5值)(生成)',
+      title: '序号',
+      key: 'index',
+      width: 80,
+      render: (_, __, index) => (page - 1) * pageSize + index + 1,
+    },
+    {
+      title: '板卡料号',
+      dataIndex: 'boardPartNo',
+      key: 'boardPartNo',
+      width: 150,
+      render: (value?: string) => value || '-',
+    },
+    {
+      title: '物料描述',
+      dataIndex: 'boardModel',
+      key: 'boardModel',
+      width: 220,
+    },
+    {
+      title: 'IC料号',
+      dataIndex: 'chipPartNo',
+      key: 'chipPartNo',
+      width: 180,
+      render: (_, record) => renderIcCellLines(record, (info) => info.chipPartNo),
+    },
+    {
+      title: 'IC型号',
+      dataIndex: 'chipModel',
+      key: 'chipModel',
+      width: 180,
+      render: (_, record) => renderIcCellLines(record, (info) => info.chipModel),
+    },
+    {
+      title: '软件版本',
+      dataIndex: 'softwareVersion',
+      key: 'softwareVersion',
+      width: 260,
+      render: (_, record) => renderIcCellLines(record, (info) => info.softwareVersion),
+    },
+    {
+      title: 'MD5',
       dataIndex: 'checksumMd5',
       key: 'checksumMd5',
       width: 180,
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (_, record) => renderIcCellLines(record, (info) => (info.softwareVersion?.trim() ? info.checksumMd5 : '')),
     },
-    { title: '描述', dataIndex: 'description', key: 'description', width: 220 },
-    { title: '发布人', dataIndex: 'publisher', key: 'publisher', width: 100 },
-    { title: '备注', dataIndex: 'remark', key: 'remark', width: 180 },
+    {
+      title: '软件状态',
+      dataIndex: 'softwareStatus',
+      key: 'softwareStatus',
+      width: 120,
+      render: (_, record) => renderIcCellLines(record, (info) => info.softwareStatus),
+    },
+    {
+      title: '存放路径',
+      dataIndex: 'description',
+      key: 'description',
+      width: 240,
+      render: (_, record) => renderIcCellLines(record, (info) => info.description),
+    },
+    {
+      title: '发布人',
+      dataIndex: 'publisher',
+      key: 'publisher',
+      width: 120,
+      render: (_, record) => renderIcCellLines(record, (info) => info.publisher),
+    },
+    {
+      title: '备注',
+      dataIndex: 'remark',
+      key: 'remark',
+      width: 180,
+      render: (_, record) => renderIcCellLines(record, (info) => info.remark),
+    },
     {
       title: '操作',
       key: 'actions',
@@ -214,7 +436,7 @@ export function ResumeManagement() {
           columns={columns}
           dataSource={pagedRecords}
           pagination={false}
-          scroll={{ x: 1900 }}
+          scroll={{ x: 2100 }}
           rowSelection={{
             selectedRowKeys,
             onChange: (keys) => setSelectedRowKeys(keys),
@@ -241,62 +463,154 @@ export function ResumeManagement() {
       <Modal
         title={editingId ? '编辑板卡信息' : '新增板卡信息'}
         open={editModalOpen}
+        width={1180}
         onCancel={() => setEditModalOpen(false)}
         onOk={() => void handleSubmitEdit()}
         destroyOnClose
       >
         <Form<ResumeFormValues> form={editForm} layout="vertical">
-          <Form.Item name="boardPartNo" label="板卡料号" rules={[{ required: true, message: '请输入板卡料号' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="boardModel" label="板卡型号" rules={[{ required: true, message: '请输入板卡型号' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="chipPartNo" label="芯片料号" rules={[{ required: true, message: '请输入芯片料号' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="chipModel" label="芯片型号" rules={[{ required: true, message: '请输入芯片型号' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="softwareVersion"
-            label="软件版本"
-            rules={[{ required: true, message: '请输入软件版本' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input />
-          </Form.Item>
-          <Form.Item name="publisher" label="发布人" rules={[{ required: true, message: '请输入发布人' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input />
-          </Form.Item>
+          <>
+            <Divider style={{ margin: '0 0 14px' }}>板卡信息</Divider>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+              <Form.Item name="boardPartNo" label="板卡料号" style={{ marginBottom: 0 }}>
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="boardModel"
+                label="物料描述"
+                rules={[{ required: true, message: '请输入物料描述' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input />
+              </Form.Item>
+            </div>
+            <Divider style={{ margin: '16px 0 14px' }}>IC信息</Divider>
+            <Form.List name="icInfos" initialValue={[{ chipPartNo: '', chipModel: '', softwareStatus: '正常' }]}>
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map((field, index) => (
+                    <div
+                      key={field.key}
+                      style={{
+                        border: '1px solid #f0f0f0',
+                        borderRadius: 10,
+                        padding: 10,
+                        marginBottom: 10,
+                        background: '#fafafa',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1.1fr 1.1fr 1.7fr 0.9fr 1.5fr 1fr 1.2fr auto',
+                          gap: 8,
+                          alignItems: 'end',
+                        }}
+                      >
+                        <Form.Item name={[field.name, 'chipPartNo']} label={index === 0 ? 'IC料号' : undefined} style={{ marginBottom: 0 }}>
+                          <Input placeholder="IC料号" />
+                        </Form.Item>
+                        <Form.Item name={[field.name, 'chipModel']} label={index === 0 ? 'IC型号' : undefined} style={{ marginBottom: 0 }}>
+                          <Input placeholder="IC型号" />
+                        </Form.Item>
+                        <Form.Item
+                          name={[field.name, 'softwareVersion']}
+                          label={index === 0 ? '软件版本' : undefined}
+                          style={{ marginBottom: 0 }}
+                        >
+                          <Input placeholder="软件版本" />
+                        </Form.Item>
+                        <Form.Item
+                          name={[field.name, 'softwareStatus']}
+                          label={index === 0 ? '软件状态' : undefined}
+                          initialValue="正常"
+                          style={{ marginBottom: 0 }}
+                        >
+                          <Select
+                            options={[
+                              { label: '正常', value: '正常' },
+                              { label: '已下架', value: '已下架' },
+                            ]}
+                          />
+                        </Form.Item>
+                        <Form.Item name={[field.name, 'description']} label={index === 0 ? '存放路径' : undefined} style={{ marginBottom: 0 }}>
+                          <Input placeholder="存放路径" />
+                        </Form.Item>
+                        <Form.Item name={[field.name, 'publisher']} label={index === 0 ? '发布人' : undefined} style={{ marginBottom: 0 }}>
+                          <Input placeholder="发布人" />
+                        </Form.Item>
+                        <Form.Item name={[field.name, 'remark']} label={index === 0 ? '备注' : undefined} style={{ marginBottom: 0 }}>
+                          <Input placeholder="备注" />
+                        </Form.Item>
+                        <Button danger type="link" disabled={fields.length === 1} onClick={() => remove(field.name)}>
+                          删除
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button type="dashed" block onClick={() => add({ chipPartNo: '', chipModel: '', softwareStatus: '正常' })}>
+                    + 添加一组IC信息
+                  </Button>
+                </>
+              )}
+            </Form.List>
+          </>
         </Form>
       </Modal>
 
       <Modal
         title="批量替换"
         open={batchModalOpen}
-        onCancel={() => setBatchModalOpen(false)}
+        onCancel={() => {
+          setBatchModalOpen(false);
+          batchForm.resetFields();
+        }}
         onOk={() => void handleBatchReplace()}
       >
         <Form<BatchReplaceFormValues> form={batchForm} layout="vertical">
-          <Form.Item name="field" label="替换字段" rules={[{ required: true, message: '请选择替换字段' }]}>
-            <Select
-              options={[
-                { label: '板卡型号', value: 'boardModel' },
-                { label: '芯片型号', value: 'chipModel' },
-                { label: '软件版本', value: 'softwareVersion' },
-                { label: '描述', value: 'description' },
-                { label: '发布人', value: 'publisher' },
-                { label: '备注', value: 'remark' },
-              ]}
+          <Form.Item
+            name="findSoftwareVersion"
+            label="查找内容-软件版本"
+            rules={[{ required: true, message: '请输入要查找的软件版本' }]}
+          >
+            <Input
+              placeholder="输入后自动回填 MD5 / 存放路径"
+              onChange={(e) => {
+                const softwareVersion = e.target.value;
+                const meta = lookupSoftwareMeta(softwareVersion);
+                batchForm.setFieldsValue({
+                  findChecksumMd5: meta.checksumMd5 ?? '',
+                  findPath: meta.path ?? '',
+                });
+              }}
             />
           </Form.Item>
-          <Form.Item name="value" label="替换值" rules={[{ required: true, message: '请输入替换值' }]}>
+          <Form.Item name="findChecksumMd5" label="查找内容-MD5">
+            <Input disabled placeholder="自动带出" />
+          </Form.Item>
+          <Form.Item name="findPath" label="查找内容-存放路径">
+            <Input disabled placeholder="自动带出" />
+          </Form.Item>
+          <Divider style={{ margin: '12px 0' }} />
+          <Form.Item
+            name="replaceSoftwareVersion"
+            label="替换为-软件版本"
+            rules={[{ required: true, message: '请输入替换后的软件版本' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="replaceChecksumMd5"
+            label="替换为-MD5"
+            rules={[{ required: true, message: '请输入替换后的MD5' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="replacePath"
+            label="替换为-存放路径"
+            rules={[{ required: true, message: '请输入替换后的存放路径' }]}
+          >
             <Input />
           </Form.Item>
         </Form>

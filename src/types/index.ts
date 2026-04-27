@@ -56,6 +56,7 @@ export type PlanChangeType = 'software_update' | 'software_offline';
 export type PlanApprovalStatus = '待审批' | '已通过' | '已驳回';
 export type BurnFlag = '是' | '否';
 export type BurnStage = '贴片前烧录' | '贴片后烧录';
+export type SoftwareStatus = '正常' | '已下架';
 
 /** 用例所属目录（模块）节点 */
 export interface CaseModule {
@@ -171,14 +172,16 @@ export interface ProductionPlan {
 export interface BurnRow {
   id: string;
   planId: string;
-  boardNo: string;
-  workOrder: string;
-  boardModel: string;
+  taskNo: string;
+  materialCode: string;
+  materialDesc: string;
   quantity: number;
   icPartNo: string;
-  softwareVersion: string;
-  shouldBurn: BurnFlag;
-  burnStage: BurnStage;
+  icModel: string;
+  softwareName: string;
+  softwareStatus?: SoftwareStatus;
+  shouldBurn?: BurnFlag;
+  burnStage?: BurnStage;
 }
 
 /** 生产计划表行（页面 14 Tab3） */
@@ -220,12 +223,13 @@ export interface PlanChangeRequest {
 /** 履历记录（页面 15） */
 export interface ResumeRecord {
   id: string;
-  boardPartNo: string;
+  boardPartNo?: string;
   boardModel: string;
   chipPartNo: string;
   chipModel: string;
   softwareVersion: string;
   checksumMd5: string;
+  softwareStatus?: SoftwareStatus;
   description?: string;
   publisher: string;
   remark?: string;
