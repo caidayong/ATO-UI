@@ -18,6 +18,7 @@ import {
   Select,
   Space,
   Table,
+  Tabs,
   Tag,
   Tooltip,
   Upload,
@@ -25,10 +26,10 @@ import {
 } from 'antd';
 import type { TableProps, UploadFile } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { mockProductionPlans } from '@/mocks/data';
 import { productionPlanDetailPath } from '@/constants/routes';
-import type { ProductionPlan, ProductionPlanStatus } from '@/types';
+import type { PlanFactory, ProductionPlan, ProductionPlanStatus } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -52,9 +53,17 @@ type PlanFilters = {
   status: 'ALL' | ProductionPlanStatus;
 };
 
+const FACTORY_LABEL_MAP: Record<PlanFactory, string> = {
+  CN: '国内工厂',
+  VN: '越南工厂',
+};
+
 export function ProductionPlanList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFactory = searchParams.get('factory');
   const [plans, setPlans] = useState<ProductionPlan[]>(mockProductionPlans);
+  const [currentFactory, setCurrentFactory] = useState<PlanFactory>(initialFactory === 'VN' ? 'VN' : 'CN');
   const [filters, setFilters] = useState<PlanFilters>({
     week: 'ALL',
     status: 'ALL',
@@ -71,20 +80,25 @@ export function ProductionPlanList() {
   const [newPlanForm] = Form.useForm<NewPlanFormValues>();
   const [editPlanForm] = Form.useForm<EditPlanFormValues>();
 
+  const factoryPlans = useMemo(
+    () => plans.filter((item) => item.factory === currentFactory),
+    [currentFactory, plans]
+  );
+
   const weekOptions = useMemo(() => {
-    const uniqWeeks = Array.from(new Set(plans.map((item) => item.week)));
+    const uniqWeeks = Array.from(new Set(factoryPlans.map((item) => item.week)));
     return uniqWeeks.map((week) => ({ label: week, value: week }));
-  }, [plans]);
+  }, [factoryPlans]);
 
   const filteredPlans = useMemo(() => {
     const keyword = queryKeyword.trim().toLowerCase();
-    return plans.filter((plan) => {
+    return factoryPlans.filter((plan) => {
       const matchWeek = filters.week === 'ALL' || plan.week === filters.week;
       const matchStatus = filters.status === 'ALL' || plan.status === filters.status;
       const matchKeyword = !keyword || plan.id.toLowerCase().includes(keyword) || plan.planName.toLowerCase().includes(keyword);
       return matchWeek && matchStatus && matchKeyword;
     });
-  }, [filters.status, filters.week, plans, queryKeyword]);
+  }, [factoryPlans, filters.status, filters.week, queryKeyword]);
 
   const pagedPlans = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -115,6 +129,7 @@ export function ProductionPlanList() {
   const handleOpenChange = (planId: string) => {
     const query = new URLSearchParams({
       mode: 'changeEdit',
+      factory: currentFactory,
     }).toString();
     navigate(`${productionPlanDetailPath(planId)}?${query}`);
   };
@@ -166,6 +181,7 @@ export function ProductionPlanList() {
     const newPlan: ProductionPlan = {
       id: newId,
       planName: values.planName,
+      factory: currentFactory,
       week: weekOptions[0]?.value ?? '2026-W17',
       status: '匹配中',
       changeCount: 0,
@@ -178,7 +194,7 @@ export function ProductionPlanList() {
     setNewPlanModalOpen(false);
     setUploadFiles([]);
     newPlanForm.resetFields();
-    message.success('新建计划成功，状态已置为匹配中');
+    message.success(`已在${FACTORY_LABEL_MAP[currentFactory]}创建计划，状态已置为匹配中`);
   };
 
   const handleEditPlan = async () => {
@@ -229,7 +245,7 @@ export function ProductionPlanList() {
       key: 'planName',
       width: 220,
       render: (value: string, record) => (
-        <a onClick={() => navigate(productionPlanDetailPath(record.id))}>{value}</a>
+        <a onClick={() => navigate(`${productionPlanDetailPath(record.id)}?factory=${currentFactory}`)}>{value}</a>
       ),
     },
     { title: '周次', dataIndex: 'week', key: 'week', width: 110 },
@@ -301,6 +317,27 @@ export function ProductionPlanList() {
   return (
     <div style={{ minHeight: 'calc(100vh - 140px)' }}>
       <Card style={{ marginBottom: 16 }}>
+        <Tabs
+          activeKey={currentFactory}
+          onChange={(factoryKey) => {
+            const nextFactory = factoryKey as PlanFactory;
+            setCurrentFactory(nextFactory);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.set('factory', nextFactory);
+              return next;
+            });
+            setFilters({ week: 'ALL', status: 'ALL' });
+            setKeywordInput('');
+            setQueryKeyword('');
+            setPage(1);
+          }}
+          items={[
+            { key: 'CN', label: '国内工厂' },
+            { key: 'VN', label: '越南工厂' },
+          ]}
+          style={{ marginBottom: 8 }}
+        />
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewPlanModalOpen(true)}>
             新建计划

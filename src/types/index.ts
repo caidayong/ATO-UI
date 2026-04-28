@@ -52,11 +52,12 @@ export type PlatformTaskTriggerType = '手动触发' | '定时触发' | '周期�
 export type PlatformEnvTab = 'test' | 'dev';
 export type PlatformSendMailPolicy = '总是发送' | '成功后发送' | '不发送';
 export type ProductionPlanStatus = '匹配中' | '匹配失败' | '待确认' | '已提交';
+export type PlanFactory = 'CN' | 'VN';
 export type PlanChangeType = 'software_update' | 'software_offline';
 export type PlanApprovalStatus = '待审批' | '已通过' | '已驳回';
 export type BurnFlag = '是' | '否';
 export type BurnStage = '贴片前烧录' | '贴片后烧录';
-export type SoftwareStatus = '正常' | '已下架';
+export type SoftwareStatus = '正常' | '已下架' | '试产';
 
 /** 用例所属目录（模块）节点 */
 export interface CaseModule {
@@ -159,6 +160,7 @@ export interface PlatformAutomationTaskDetail {
 export interface ProductionPlan {
   id: string;
   planName: string;
+  factory: PlanFactory;
   week: string;
   status: ProductionPlanStatus;
   changeCount: number;

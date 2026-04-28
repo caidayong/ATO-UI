@@ -24,7 +24,7 @@ import {
 import type { TableProps } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SwapOutlined } from '@ant-design/icons';
 import { mockResumeRecords } from '@/mocks/data';
-import type { ResumeRecord } from '@/types';
+import type { ResumeRecord, SoftwareStatus } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -33,7 +33,7 @@ type ResumeIcPair = {
   chipModel?: string;
   softwareVersion?: string;
   checksumMd5?: string;
-  softwareStatus?: '正常' | '已下架';
+  softwareStatus?: SoftwareStatus;
   description?: string;
   publisher?: string;
   remark?: string;
@@ -356,7 +356,7 @@ export function ResumeManagement() {
       render: (_, record) => renderIcCellLines(record, (info) => info.softwareVersion),
     },
     {
-      title: 'MD5',
+      title: 'Checksum值',
       dataIndex: 'checksumMd5',
       key: 'checksumMd5',
       width: 180,
@@ -530,6 +530,7 @@ export function ResumeManagement() {
                             options={[
                               { label: '正常', value: '正常' },
                               { label: '已下架', value: '已下架' },
+                              { label: '试产', value: '试产' },
                             ]}
                           />
                         </Form.Item>

@@ -15,6 +15,7 @@ import {
   Form,
   Input,
   Modal,
+  Radio,
   Select,
   Space,
   Table,
@@ -56,6 +57,7 @@ type SubmitConfirmFormValues = {
   senderIds: string[];
   ccIds?: string[];
   ccTeamId?: string;
+  includeExcelAttachment: boolean;
 };
 
 const DEFAULT_CHANGE_REASONS = ['迭代更新', 'bug修复'];
@@ -66,12 +68,14 @@ type SubmitContactsDraft = {
   senderIds: string[];
   ccIds?: string[];
   ccTeamId?: string;
+  includeExcelAttachment: boolean;
 };
 
 export function ProductionPlanDetail() {
   const navigate = useNavigate();
   const { planId = '' } = useParams();
   const [searchParams] = useSearchParams();
+  const factory = searchParams.get('factory');
   const [activeTab, setActiveTab] = useState<'burn' | 'log' | 'production'>('burn');
   const mode = searchParams.get('mode');
   const isChangeEdit = mode === 'changeEdit';
@@ -86,6 +90,7 @@ export function ProductionPlanDetail() {
   const [changeReasonOptions, setChangeReasonOptions] = useState<string[]>(DEFAULT_CHANGE_REASONS);
   const [newChangeReason, setNewChangeReason] = useState('');
   const [submitContactsByPlan, setSubmitContactsByPlan] = useState<Record<string, SubmitContactsDraft>>({});
+  const plansPathWithFactory = factory === 'VN' ? `${ROUTES.PTSW_PLANS}?factory=VN` : `${ROUTES.PTSW_PLANS}?factory=CN`;
 
   const plan = useMemo<ProductionPlan | undefined>(() => {
     return mockProductionPlans.find((item) => item.id === planId);
@@ -282,7 +287,9 @@ export function ProductionPlanDetail() {
         actionType: isChangeEdit ? '变更' : '提交',
         summary: isChangeEdit
           ? `变更内容：原因=${changeDetails.reason ?? '-'}；影响范围=${changeDetails.impactScope ?? '-'}；备注=${changeDetails.remark || '-'}`
-          : '提交计划并发送通知邮件',
+          : submitValues.includeExcelAttachment
+            ? '提交计划并发送通知邮件（含Excel附件）'
+            : '提交计划并发送通知邮件（仅正文，不含Excel附件）',
       };
       setLogRows((prev) => [submitLog, ...prev]);
       mockPlanOperationLogs.unshift(submitLog);
@@ -292,6 +299,7 @@ export function ProductionPlanDetail() {
         senderIds: submitValues.senderIds,
         ccIds: submitValues.ccIds,
         ccTeamId: submitValues.ccTeamId,
+        includeExcelAttachment: submitValues.includeExcelAttachment,
       };
       setSubmitContactsByPlan((prev) => {
         const next = { ...prev, [planId]: savedContacts };
@@ -299,7 +307,13 @@ export function ProductionPlanDetail() {
         return next;
       });
       submitForm.setFieldsValue(savedContacts);
-      message.success(isChangeEdit ? '变更提交成功，已进入审批流程（Mock）' : '提交成功');
+      message.success(
+        isChangeEdit
+          ? '变更提交成功，已进入审批流程（Mock）'
+          : submitValues.includeExcelAttachment
+            ? '提交成功，邮件将携带Excel附件（Mock）'
+            : '提交成功，邮件仅发送正文（Mock）'
+      );
     }, 500);
   };
 
@@ -342,6 +356,7 @@ export function ProductionPlanDetail() {
       senderIds: cachedContacts?.senderIds ?? [],
       ccIds: cachedContacts?.ccIds ?? [],
       ccTeamId: cachedContacts?.ccTeamId,
+      includeExcelAttachment: cachedContacts?.includeExcelAttachment ?? true,
     });
     setSubmitModalOpen(true);
   };
@@ -447,6 +462,7 @@ export function ProductionPlanDetail() {
             options={[
               { label: '正常', value: '正常' },
               { label: '已下架', value: '已下架' },
+              { label: '试产', value: '试产' },
             ]}
             onChange={(nextValue) => updateBurnRow(record.id, { softwareStatus: nextValue })}
           />
@@ -519,7 +535,7 @@ export function ProductionPlanDetail() {
     return (
       <Card>
         <Empty description="计划不存在或已被删除">
-          <Button onClick={() => navigate(ROUTES.PTSW_PLANS)}>返回计划列表</Button>
+          <Button onClick={() => navigate(plansPathWithFactory)}>返回计划列表</Button>
         </Empty>
       </Card>
     );
@@ -530,7 +546,7 @@ export function ProductionPlanDetail() {
       <Card style={{ marginBottom: 16 }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(ROUTES.PTSW_PLANS)}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(plansPathWithFactory)}>
               返回
             </Button>
             <strong>{plan.planName}</strong>
@@ -730,6 +746,19 @@ export function ProductionPlanDetail() {
                 />
               </Form.Item>
             </div>
+          </Form.Item>
+          <Form.Item
+            label="是否带Excel附件"
+            name="includeExcelAttachment"
+            initialValue={true}
+            style={{ marginTop: 12, marginBottom: 0 }}
+          >
+            <Radio.Group
+              options={[
+                { label: '是', value: true },
+                { label: '否', value: false },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>
