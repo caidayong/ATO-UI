@@ -16,7 +16,6 @@ import {
   Pagination,
   Space,
   Table,
-  Tag,
   message,
   Select,
   Divider,
@@ -24,24 +23,14 @@ import {
 import type { TableProps } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SwapOutlined } from '@ant-design/icons';
 import { mockResumeRecords } from '@/mocks/data';
-import type { ResumeRecord, SoftwareStatus } from '@/types';
+import type { ResumeIcInfo, ResumeRecord } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 10;
 
-type ResumeIcPair = {
-  chipPartNo?: string;
-  chipModel?: string;
-  softwareVersion?: string;
-  checksumMd5?: string;
-  softwareStatus?: SoftwareStatus;
-  description?: string;
-  publisher?: string;
-  remark?: string;
-};
 type ResumeFormValues = Omit<ResumeRecord, 'id' | 'checksumMd5' | 'chipPartNo' | 'chipModel'> & {
   chipPartNo?: string;
   chipModel?: string;
-  icInfos?: ResumeIcPair[];
+  icInfos?: ResumeIcInfo[];
 };
 type BatchReplaceFormValues = {
   findSoftwareVersion: string;
@@ -53,7 +42,7 @@ type BatchReplaceFormValues = {
 };
 type ResumeBoardRow = ResumeRecord & {
   groupIds: string[];
-  icInfos: ResumeIcPair[];
+  icInfos: ResumeIcInfo[];
 };
 
 export function ResumeManagement() {
@@ -100,7 +89,7 @@ export function ResumeManagement() {
     const groupMap = new Map<string, ResumeBoardRow>();
     records.forEach((item) => {
       const key = `${item.boardPartNo ?? ''}|${item.boardModel}`;
-      const normalizedInfos: ResumeIcPair[] = item.icInfos?.length
+      const normalizedInfos: ResumeIcInfo[] = item.icInfos?.length
         ? item.icInfos
         : [
             {
@@ -156,8 +145,8 @@ export function ResumeManagement() {
     return filteredRecords.slice(start, start + pageSize);
   }, [filteredRecords, page, pageSize]);
 
-  const getIcInfos = (record: ResumeBoardRow): ResumeIcPair[] => record.icInfos ?? [];
-  const renderIcCellLines = (record: ResumeBoardRow, pick: (info: ResumeIcPair) => string | undefined) =>
+  const getIcInfos = (record: ResumeBoardRow): ResumeIcInfo[] => record.icInfos ?? [];
+  const renderIcCellLines = (record: ResumeBoardRow, pick: (info: ResumeIcInfo) => string | undefined) =>
     getIcInfos(record).map((info, index, arr) => (
       <div
         key={`${record.id}-line-${index}`}

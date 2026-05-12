@@ -3,9 +3,8 @@ import {
   DashboardOutlined,
   CodeOutlined,
   AppstoreOutlined,
-  DatabaseOutlined,
+  ContainerOutlined,
   ToolOutlined,
-  FunctionOutlined,
   SettingOutlined,
   BellOutlined,
   QuestionCircleOutlined,
@@ -20,7 +19,22 @@ const { Header, Sider, Content } = Layout;
 
 type MenuItem = Required<MenuProps>['items'][number];
 
+const AUTOMATION_FUNCTIONS_KEY = '/automation/functions';
+const AUTOMATION_RESOURCES_KEY = '/automation/resources';
+
 function mainMenuSelectedKey(pathname: string): string {
+  if (pathname === '/functions' || pathname.startsWith('/functions/')) {
+    return AUTOMATION_FUNCTIONS_KEY;
+  }
+  if (pathname === '/resources' || pathname.startsWith('/resources/')) {
+    return AUTOMATION_RESOURCES_KEY;
+  }
+  if (
+    pathname === ROUTES.AUTOMATION_API_MANAGEMENT ||
+    pathname.startsWith(`${ROUTES.AUTOMATION_API_MANAGEMENT}/`)
+  ) {
+    return ROUTES.AUTOMATION_API_MANAGEMENT;
+  }
   if (pathname.startsWith(ROUTES.AUTOMATION_PROJECTS)) {
     return ROUTES.AUTOMATION_PROJECTS;
   }
@@ -42,6 +56,9 @@ function mainMenuSelectedKey(pathname: string): string {
   if (pathname.startsWith(ROUTES.PTSW_RESUME)) {
     return ROUTES.PTSW_RESUME;
   }
+  if (pathname === ROUTES.TOOLS || pathname.startsWith(`${ROUTES.TOOLS}/`)) {
+    return ROUTES.TOOLS_MARKET_DEFECTS;
+  }
   return pathname;
 }
 
@@ -59,6 +76,18 @@ const menuItems: MenuItem[] = [
       {
         key: ROUTES.AUTOMATION_PROJECTS,
         label: <Link to={ROUTES.AUTOMATION_PROJECTS}>项目管理</Link>,
+      },
+      {
+        key: ROUTES.AUTOMATION_API_MANAGEMENT,
+        label: <Link to={ROUTES.AUTOMATION_API_MANAGEMENT}>接口管理</Link>,
+      },
+      {
+        key: AUTOMATION_FUNCTIONS_KEY,
+        label: <Link to="/functions">公共函数</Link>,
+      },
+      {
+        key: AUTOMATION_RESOURCES_KEY,
+        label: <Link to="/resources">资源管理</Link>,
       },
     ],
   },
@@ -79,7 +108,7 @@ const menuItems: MenuItem[] = [
   },
   {
     key: '/ptsw',
-    icon: <AppstoreOutlined />,
+    icon: <ContainerOutlined />,
     label: '产测软件管理',
     children: [
       {
@@ -93,19 +122,15 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    key: '/resources',
-    icon: <DatabaseOutlined />,
-    label: '资源管理',
-  },
-  {
     key: '/tools',
     icon: <ToolOutlined />,
     label: '测试工具',
-  },
-  {
-    key: '/functions',
-    icon: <FunctionOutlined />,
-    label: '公共函数',
+    children: [
+      {
+        key: ROUTES.TOOLS_MARKET_DEFECTS,
+        label: <Link to={ROUTES.TOOLS_MARKET_DEFECTS}>市场缺陷分析</Link>,
+      },
+    ],
   },
   {
     key: '/settings',
@@ -128,6 +153,41 @@ const userDropdownItems: MenuProps['items'] = [
 ];
 
 function buildBreadcrumbItems(pathname: string): BreadcrumbProps['items'] {
+  if (pathname === '/resources' || pathname.startsWith('/resources/')) {
+    return [{ title: '自动化开发' }, { title: '资源管理' }];
+  }
+
+  if (pathname === '/functions' || pathname.startsWith('/functions/')) {
+    return [{ title: '自动化开发' }, { title: '公共函数' }];
+  }
+
+  if (
+    pathname === ROUTES.AUTOMATION_API_MANAGEMENT ||
+    pathname.startsWith(`${ROUTES.AUTOMATION_API_MANAGEMENT}/`)
+  ) {
+    return [{ title: '自动化开发' }, { title: '接口管理' }];
+  }
+
+  if (pathname === ROUTES.TOOLS_MARKET_DEFECTS) {
+    return [{ title: '测试工具' }, { title: '市场缺陷分析' }];
+  }
+
+  if (pathname === `${ROUTES.TOOLS_MARKET_DEFECTS}/report`) {
+    return [
+      { title: '测试工具' },
+      { title: <Link to={ROUTES.TOOLS_MARKET_DEFECTS}>市场缺陷分析</Link> },
+      { title: '报表' },
+    ];
+  }
+
+  if (/^\/tools\/market-defects\/reports\/[^/]+$/.test(pathname)) {
+    return [
+      { title: '测试工具' },
+      { title: <Link to={ROUTES.TOOLS_MARKET_DEFECTS}>市场缺陷分析</Link> },
+      { title: '报告详情' },
+    ];
+  }
+
   if (pathname === ROUTES.SETTINGS_BASIC) {
     return [
       { title: '系统设置' },
@@ -263,7 +323,7 @@ export function MainLayout() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            defaultOpenKeys={['/automation', '/application', '/ptsw', '/settings']}
+            defaultOpenKeys={['/automation', '/application', '/ptsw', '/settings', '/tools']}
             items={menuItems}
             style={{ height: '100%', borderRight: 0 }}
           />

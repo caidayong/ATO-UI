@@ -6,6 +6,8 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   /** 项目管理（页面 2） */
   AUTOMATION_PROJECTS: '/automation/projects',
+  /** 接口管理（自动化开发） */
+  AUTOMATION_API_MANAGEMENT: '/automation/interface-management',
   /** 平台自动化（自动化应用） */
   APPLICATION_PLATFORM: '/application/platform',
   /** 平台自动化任务详情（自动化应用） */
@@ -18,7 +20,25 @@ export const ROUTES = {
   PTSW_PLANS: '/ptsw/plans',
   /** 履历表管理（页面 15） */
   PTSW_RESUME: '/ptsw/resume',
+  /** 测试工具 · 卡片入口（V1.0.1-P5） */
+  TOOLS: '/tools',
+  /** 测试工具 / 市场缺陷分析（V1.0.1-P5） */
+  TOOLS_MARKET_DEFECTS: '/tools/market-defects',
+  /** 测试工具 / 市场缺陷分析 / 报表（V1.0.1-P5） */
+  TOOLS_MARKET_DEFECTS_REPORT: '/tools/market-defects/report',
 } as const;
+
+/**
+ * 市场缺陷列表 → 报表页：筛选 / 搜索快照（sessionStorage）
+ * @see docs/spec/01-信息架构与路由.md §4
+ */
+export const MARKET_DEFECTS_LIST_SNAPSHOT_STORAGE_KEY =
+  'ato:market-defects:list-snapshot' as const;
+
+/** 测试工具 / 市场缺陷分析 / 报告详情（V1.0.1-P5） */
+export function toolsMarketDefectReportDetailPath(reportId: string): string {
+  return `${ROUTES.TOOLS_MARKET_DEFECTS}/reports/${encodeURIComponent(reportId)}`;
+}
 
 /** 项目详情（页面 3） */
 export function projectDetailPath(projectId: string): string {
@@ -41,6 +61,7 @@ export type VersionDevSegment =
   | 'files'
   | 'functions'
   | 'tags'
+  | 'suites'
   | 'runs';
 
 /** 版本用例开发 - 新窗口路由前缀 */

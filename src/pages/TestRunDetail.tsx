@@ -1,11 +1,13 @@
 /**
  * @page 任务详情
- * @version V1.0.0
+ * @version V1.0.2
  * @base docs/spec/04-页面契约.md § 页面 10（测试运行 / 任务详情）；PRD 章节待同步，以契约为准
  * @changes
  *   - V1.0.0: 初始实现任务详情页；支持任务详情/运行日志/测试报告三 Tab；测试报告中运行记录与汇总模块默认折叠并可展开
+ *   - V1.0.1: 测试报告用例列表右上方展示当前选中一级模块的运行耗时（秒）
+ *   - V1.0.2: 去掉目录树「全部」节点；选中根目录时展示运行总耗时（秒）
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Button,
@@ -105,6 +107,15 @@ type ReportSummary = {
   endpointCount: number;
   endpointExecCount: number;
   env: string;
+};
+
+/** 测试报告：各一级模块运行耗时（秒），与运行记录 Mock 对齐；对接接口后可改为按 runId+moduleId 查询 */
+const REPORT_TOP_LEVEL_MODULE_DURATION_SEC: Record<string, number> = {
+  'mod-pay-order': 300,
+  'mod-pay-refund': 186,
+  'mod-pay-coupon': 92,
+  'mod-pay-risk': 245,
+  'mod-pay-recon': 154,
 };
 
 const REPORT_SUMMARY_BY_RECORD: Record<string, ReportSummary> = {
@@ -509,8 +520,7 @@ export function TestRunDetail() {
     return map;
   }, []);
 
-  const MODULE_ROOT_ALL = '__root_all__';
-  const [reportSelectedModuleKey, setReportSelectedModuleKey] = useState<string>(MODULE_ROOT_ALL);
+  const [reportSelectedModuleKey, setReportSelectedModuleKey] = useState<string>('');
   const [reportStatusFilter, setReportStatusFilter] = useState<ReportStatusFilter>('all');
   const [selectedReportCaseId, setSelectedReportCaseId] = useState<string>('');
   const [caseDrawerOpen, setCaseDrawerOpen] = useState(false);
@@ -519,12 +529,22 @@ export function TestRunDetail() {
     () => mockCaseModules.filter((m) => m.versionId === versionId).slice().sort((a, b) => a.sort - b.sort),
     [versionId]
   );
-  const versionModuleIds = useMemo(() => versionModules.map((m) => m.id), [versionModules]);
+
+  const versionRootModuleId = useMemo(() => {
+    const roots = versionModules.filter((m) => m.parentId === null).sort((a, b) => a.sort - b.sort);
+    return roots[0]?.id ?? '';
+  }, [versionModules]);
+
+  useEffect(() => {
+    setReportSelectedModuleKey(versionRootModuleId);
+  }, [versionRootModuleId]);
+
+  const effectiveReportModuleKey = reportSelectedModuleKey || versionRootModuleId;
 
   const allowedModuleIds = useMemo(() => {
-    if (reportSelectedModuleKey === MODULE_ROOT_ALL) return new Set(versionModuleIds);
-    return collectDescendantModuleIds(reportSelectedModuleKey, versionModules);
-  }, [MODULE_ROOT_ALL, reportSelectedModuleKey, versionModuleIds, versionModules]);
+    if (!effectiveReportModuleKey) return new Set<string>();
+    return collectDescendantModuleIds(effectiveReportModuleKey, versionModules);
+  }, [effectiveReportModuleKey, versionModules]);
 
   const selectedModuleCases = useMemo(
     () => versionCases.filter((c) => allowedModuleIds.has(c.moduleId)),
@@ -560,16 +580,48 @@ export function TestRunDetail() {
   );
 
   const moduleCountsByKey = useMemo(() => {
-    const map: Record<string, StatusCounts> = {
-      [MODULE_ROOT_ALL]: calcStatusCounts(versionCases),
-    };
+    const map: Record<string, StatusCounts> = {};
     versionModules.forEach((m) => {
       const allowed = collectDescendantModuleIds(m.id, versionModules);
       const cases = versionCases.filter((c) => allowed.has(c.moduleId));
       map[m.id] = calcStatusCounts(cases);
     });
     return map;
-  }, [MODULE_ROOT_ALL, versionModules, versionCases]);
+  }, [versionModules, versionCases]);
+
+  /** 挂在版本根目录下的直接子节点（如「下单流程」），用于仅在这些节点展示模块耗时 */
+  const firstLevelModuleIdSet = useMemo(() => {
+    const rootIds = new Set(versionModules.filter((m) => m.parentId === null).map((m) => m.id));
+    return new Set(
+      versionModules.filter((m) => m.parentId !== null && rootIds.has(m.parentId)).map((m) => m.id)
+    );
+  }, [versionModules]);
+
+  const reportDurationRibbon = useMemo(() => {
+    const key = effectiveReportModuleKey;
+    if (!key) return null;
+    const mod = versionModules.find((m) => m.id === key);
+    if (mod?.parentId === null) {
+      return {
+        prefix: '运行总耗时',
+        value: `${Math.round(reportSummary.durationSec)}s`,
+      };
+    }
+    if (firstLevelModuleIdSet.has(key)) {
+      const sec = REPORT_TOP_LEVEL_MODULE_DURATION_SEC[key];
+      if (sec === undefined) return null;
+      return {
+        prefix: '模块运行耗时',
+        value: `${Math.round(sec)}s`,
+      };
+    }
+    return null;
+  }, [
+    effectiveReportModuleKey,
+    versionModules,
+    reportSummary.durationSec,
+    firstLevelModuleIdSet,
+  ]);
 
   const renderModuleTitle = (name: string, counts: StatusCounts) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -606,19 +658,10 @@ export function TestRunDetail() {
         children: build(m.id),
       }));
     };
-    return [
-      {
-        key: MODULE_ROOT_ALL,
-        title: renderModuleTitle('全部', moduleCountsByKey[MODULE_ROOT_ALL]),
-        children: build(null),
-      },
-    ];
-  }, [MODULE_ROOT_ALL, moduleCountsByKey, renderModuleTitle, versionModules]);
+    return build(null);
+  }, [moduleCountsByKey, renderModuleTitle, versionModules]);
 
-  const reportExpandedKeys = useMemo(
-    () => [MODULE_ROOT_ALL, ...versionModules.map((m) => m.id)],
-    [MODULE_ROOT_ALL, versionModules]
-  );
+  const reportExpandedKeys = useMemo(() => versionModules.map((m) => m.id), [versionModules]);
 
   const reportColumns: ColumnsType<ReportCaseRow> = [
     {
@@ -956,55 +999,73 @@ export function TestRunDetail() {
             <div style={{ overflow: 'hidden' }}>
               <Tree
                 blockNode
-                selectedKeys={[reportSelectedModuleKey]}
+                selectedKeys={effectiveReportModuleKey ? [effectiveReportModuleKey] : []}
                 defaultExpandedKeys={reportExpandedKeys}
                 treeData={reportTreeData}
                 onSelect={(keys) => {
                   const k = keys[0];
                   if (typeof k === 'string') setReportSelectedModuleKey(k);
+                  else if (keys.length === 0 && versionRootModuleId) setReportSelectedModuleKey(versionRootModuleId);
                 }}
                 height={420}
               />
             </div>
             <div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {(['all', 'success', 'failed', 'abnormal', 'skipped'] as ReportStatusFilter[]).map((key) => {
-                  const meta =
-                    key === 'all'
-                      ? { color: '#1677ff', label: '全部' }
-                      : STATUS_FILTER_META[key as Exclude<ReportStatusFilter, 'all'>];
-                  const count =
-                    key === 'all'
-                      ? selectedModuleCounts.total
-                      : key === 'success'
-                        ? selectedModuleCounts.success
-                        : key === 'failed'
-                          ? selectedModuleCounts.failed
-                          : key === 'abnormal'
-                            ? selectedModuleCounts.abnormal
-                            : selectedModuleCounts.skipped;
-                  return (
-                    <Button
-                      key={key}
-                      type={reportStatusFilter === key ? 'primary' : 'default'}
-                      size="small"
-                      onClick={() => setReportStatusFilter(key)}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: meta.color,
-                          marginRight: 6,
-                          verticalAlign: 'middle',
-                        }}
-                      />
-                      {meta.label} {count}
-                    </Button>
-                  );
-                })}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                  {(['all', 'success', 'failed', 'abnormal', 'skipped'] as ReportStatusFilter[]).map((key) => {
+                    const meta =
+                      key === 'all'
+                        ? { color: '#1677ff', label: '全部' }
+                        : STATUS_FILTER_META[key as Exclude<ReportStatusFilter, 'all'>];
+                    const count =
+                      key === 'all'
+                        ? selectedModuleCounts.total
+                        : key === 'success'
+                          ? selectedModuleCounts.success
+                          : key === 'failed'
+                            ? selectedModuleCounts.failed
+                            : key === 'abnormal'
+                              ? selectedModuleCounts.abnormal
+                              : selectedModuleCounts.skipped;
+                    return (
+                      <Button
+                        key={key}
+                        type={reportStatusFilter === key ? 'primary' : 'default'}
+                        size="small"
+                        onClick={() => setReportStatusFilter(key)}
+                      >
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: meta.color,
+                            marginRight: 6,
+                            verticalAlign: 'middle',
+                          }}
+                        />
+                        {meta.label} {count}
+                      </Button>
+                    );
+                  })}
+                </div>
+                {reportDurationRibbon ? (
+                  <Typography.Text type="secondary" style={{ flexShrink: 0 }}>
+                    {reportDurationRibbon.prefix}{' '}
+                    <Typography.Text strong>{reportDurationRibbon.value}</Typography.Text>
+                  </Typography.Text>
+                ) : null}
               </div>
 
               <Table

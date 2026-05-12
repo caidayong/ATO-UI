@@ -222,6 +222,18 @@ export interface PlanChangeRequest {
   approvedAt?: string;
 }
 
+/** 履历表：板卡下单条 IC / 软件信息（可多行） */
+export interface ResumeIcInfo {
+  chipPartNo?: string;
+  chipModel?: string;
+  softwareVersion?: string;
+  checksumMd5?: string;
+  softwareStatus?: SoftwareStatus;
+  description?: string;
+  publisher?: string;
+  remark?: string;
+}
+
 /** 履历记录（页面 15） */
 export interface ResumeRecord {
   id: string;
@@ -235,4 +247,176 @@ export interface ResumeRecord {
   description?: string;
   publisher: string;
   remark?: string;
+  /** 多 IC / 软件行；缺省时页面用 chip/software 顶层字段归一化 */
+  icInfos?: ResumeIcInfo[];
+}
+
+/** 套件 — 所属模块一行：包含/不包含 + 模块（可多行，行末 + 追加） */
+export interface SuiteModuleScopeRow {
+  relation: 'include' | 'exclude';
+  moduleIds: string[];
+}
+
+/** 套件 — 标签一行：等于/包含/不包含 + 标签值（可多行） */
+export interface SuiteTagScopeRow {
+  relation: 'eq' | 'include' | 'exclude';
+  tags: string[];
+}
+
+/** 套件管理（V1.0.1-P5）— 用例范围持久化（与测试运行「执行范围」字段语义对齐方向一致，套件侧为验收专用结构） */
+export interface SuiteScopePersist {
+  moduleRows: SuiteModuleScopeRow[];
+  tagRows: SuiteTagScopeRow[];
+}
+
+/** 套件（V1.0.1-P5） */
+export interface VersionSuite {
+  id: string;
+  name: string;
+  scopeSummary: string;
+  description?: string;
+  createdAt: string;
+  createdBy: string;
+  scope?: SuiteScopePersist;
+}
+
+/** 市场缺陷列表行（V1.0.1-P5 列表字段对齐验收列） */
+export interface MarketDefect {
+  id: string;
+  defectSource: string;
+  title: string;
+  createdAt: string;
+  defectType: string;
+  productLine: string;
+  /** 缺陷归属团队（新增只读列） */
+  defectOwnerTeam: string;
+  /** 是否有效问题（是/否） */
+  validIssue: string;
+  actualTeam: string;
+  mainResponsibilityAttribution: string;
+  mainResponsiblePerson: string;
+  leakageReason: string;
+  improvementMeasure: string;
+  improvementOwner: string;
+  /** 完成进度 0～100（百分比，列表以进度条展示） */
+  completionProgress: number;
+  autoCovered: string;
+  canCover: string;
+  uncoveredReason: string;
+  autoMissReason: string;
+}
+
+/** 分析报告状态（V1.0.1-P5） */
+export type AnalysisReportTaskStatus = '进行中' | '已完成' | '异常';
+
+/** 「分析报告」Tab 列表行（Mock，V1.0.1-P5） */
+export interface AnalysisReportTask {
+  reportId: string;
+  reportName: string;
+  teamName: string;
+  timeRange: string;
+  creator: string;
+  createdAt: string;
+  /** 有效缺陷总数（展示） */
+  validDefectTotal: string;
+  /** 产品缺陷泄露率（展示） */
+  productDefectLeakRate: string;
+  leakRate: string;
+  status: AnalysisReportTaskStatus;
+  /** 以下字段用于编辑弹窗回填（与创建表单一致） */
+  scopeYear?: string;
+  scopeQuarter?: string;
+  scopeMonth?: string;
+  scopeActualTeam?: string;
+  rdmsProductIds?: string[];
+  productOwner?: string;
+  devOwner?: string;
+  testOwner?: string;
+}
+
+/** 列表 → 报表 sessionStorage 快照（V1.0.1-P5） */
+export interface MarketDefectListSnapshot {
+  filters: {
+    /** 创建日期维度：年（值如 `2026` 或 `全部`） */
+    year?: string;
+    /** 季度：`Q1`…`Q4` 或 `全部` */
+    quarter?: string;
+    /** 月份：`5月` 或 `全部` */
+    month?: string;
+    /** 表头列筛选（是否有效问题 / 实际归属团队 / 主要责任归属） */
+    valid?: string;
+    actualTeam?: string;
+    mainResponsibilityAttribution?: string;
+    /** 缺陷归属团队 */
+    defectOwnerTeam?: string;
+  };
+  /** 单一搜索框文案 */
+  search: { text?: string };
+  page: number;
+  pageSize: number;
+  updatedAt: string;
+}
+
+/** 接口管理：HTTP 请求方法 */
+export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
+
+/** 接口管理：接口类型 */
+export type ApiType = 'API' | 'WebSocket' | 'gRPC' | 'GraphQL';
+
+/** 接口管理：接口目录节点 */
+export interface ApiCategory {
+  id: string;
+  parentId: string | null;
+  name: string;
+  sort: number;
+  description?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+/** 接口管理：Path / Query 等参数行（预览与编辑共用结构） */
+export interface ApiParamRow {
+  name: string;
+  defaultValue?: string;
+  /** 是否必须 */
+  required: boolean;
+  description?: string;
+}
+
+/** 接口管理：接口场景（同一接口下不同参数组合） */
+export interface ApiInterfaceScenario {
+  id: string;
+  apiId: string;
+  name: string;
+  description?: string;
+}
+
+/** 接口管理：接口定义 */
+export interface ApiDefinition {
+  id: string;
+  categoryId: string;
+  name: string;
+  method: ApiMethod;
+  path: string;
+  type: ApiType;
+  description?: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  /** 备注（详情区） */
+  remark?: string;
+  /** 请求协议展示，如 HTTP */
+  requestProtocol?: string;
+  pathParams?: ApiParamRow[];
+  queryParams?: ApiParamRow[];
+  /** 接口场景列表（树中挂在接口下） */
+  scenarios?: ApiInterfaceScenario[];
+}
+
+/** 接口管理：环境配置 */
+export interface ApiEnvironment {
+  id: string;
+  name: string;
+  baseUrl: string;
+  isDefault?: boolean;
 }

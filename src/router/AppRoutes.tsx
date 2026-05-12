@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ROUTES } from '@/constants/routes';
 import { MainLayout } from '@/layouts/MainLayout';
 import { VersionDevLayout } from '@/layouts/VersionDevLayout';
 import { ProjectList } from '@/pages/ProjectList';
@@ -18,6 +19,11 @@ import { PlatformAutomationTaskDetail } from '@/pages/PlatformAutomationTaskDeta
 import { ProductionPlanList } from '@/pages/ProductionPlanList';
 import { ProductionPlanDetail } from '@/pages/ProductionPlanDetail';
 import { ResumeManagement } from '@/pages/ResumeManagement';
+import { SuiteManagement } from '@/pages/SuiteManagement';
+import { MarketDefectAnalysis } from '@/pages/MarketDefectAnalysis';
+import { MarketDefectReportPage } from '@/pages/MarketDefectReportPage';
+import { MarketDefectReportDetailPage } from '@/pages/MarketDefectReportDetailPage';
+import { InterfaceManagement } from '@/pages/InterfaceManagement';
 
 function VersionDevIndexRedirect() {
   const { search } = useLocation();
@@ -46,6 +52,7 @@ export function AppRoutes() {
         <Route path="file" element={<VersionDevFileAliasRedirect />} />
         <Route path="functions" element={<CustomFunctionManagement />} />
         <Route path="tags" element={<TagManagement />} />
+        <Route path="suites" element={<SuiteManagement />} />
         <Route path="runs" element={<TestRuns />} />
         <Route path="runs/:runId" element={<TestRunDetail />} />
         <Route path="*" element={<VersionDevFallbackRedirect />} />
@@ -58,6 +65,7 @@ export function AppRoutes() {
         <Route path="automation/projects" element={<ProjectList />} />
         <Route path="automation/projects/:id" element={<ProjectDetail />} />
         <Route path="automation/projects/:projectId/versions/:versionId" element={<VersionDetail />} />
+        <Route path="automation/interface-management" element={<InterfaceManagement />} />
         <Route path="application/platform" element={<PlatformAutomation />} />
         <Route path="application/platform/tasks/:taskId" element={<PlatformAutomationTaskDetail />} />
         <Route path="application/device" element={<PlaceholderPage title="设备自动化" />} />
@@ -65,6 +73,10 @@ export function AppRoutes() {
         <Route path="ptsw/plans" element={<ProductionPlanList />} />
         <Route path="ptsw/plans/:planId" element={<ProductionPlanDetail />} />
         <Route path="ptsw/resume" element={<ResumeManagement />} />
+        <Route path="tools" element={<Navigate to={ROUTES.TOOLS_MARKET_DEFECTS} replace />} />
+        <Route path="tools/market-defects" element={<MarketDefectAnalysis />} />
+        <Route path="tools/market-defects/report" element={<MarketDefectReportPage />} />
+        <Route path="tools/market-defects/reports/:reportId" element={<MarketDefectReportDetailPage />} />
         <Route path="*" element={<PlaceholderPage title="页面建设中…" />} />
       </Route>
     </Routes>

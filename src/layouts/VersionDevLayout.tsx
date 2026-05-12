@@ -17,7 +17,8 @@ const SEGMENTS: { key: VersionDevSegment; label: string }[] = [
   { key: 'variables', label: '变量管理' },
   { key: 'files', label: '文件管理' },
   { key: 'functions', label: '自定义函数' },
-  { key: 'tags', label: '标签管理' },
+  { key: 'tags', label: '标签/分组' },
+  { key: 'suites', label: '套件管理' },
   { key: 'runs', label: '测试运行' },
 ];
 

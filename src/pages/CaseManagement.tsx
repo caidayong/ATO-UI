@@ -1,6 +1,6 @@
 /**
  * @page 用例管理
- * @version V1.0.21
+ * @version V1.0.24
  * @base docs/spec/04-页面契约.md § 页面 5（用例管理）；ATO_V1.0.0-页面需求与交互规格.md 第 4.5 节（用例管理）
  * @changes
  *   - V1.0.0: 新窗口内 3:7 分栏；目录树（右键菜单占位）；用例列表；用例详情多 Tab；步骤简版编辑器（Mock 状态）
@@ -25,6 +25,9 @@
  *   - V1.0.19: 选择函数改为复用自定义函数树数据；调用函数断言区补充列表头字段
  *   - V1.0.20: 导出测试用例：弹窗多选目录树（仅目录）、生成 YAML 浏览器下载
  *   - V1.0.21: 导出默认「根目录」表示全量；选根目录时 YAML 的 directories 仅记根目录一条
+ *   - V1.0.22: 目录/子目录右侧「标签/分组」Tab 增加分组（单选可清空）与标签（多选可移除）下拉配置（Mock 按目录本地保存，选项与全局分组及本版本用例标签对齐）
+ *   - V1.0.23: 用例列表工具栏增加「复制到」：勾选后可点，弹窗选择目标目录批量复制；与目标目录标题重复时二次确认「目标目录用例已存在，请确认」后自动加副本后缀
+ *   - V1.0.24: 用例详情「调试」Mock：运行中顶栏提示+按钮 loading；结束后底部展开「调试结果」折叠面板（用例执行步骤 / 测试步骤与验收 Mock 日志一致）
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,6 +38,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Collapse,
   Dropdown,
   Empty,
   Form,
@@ -44,6 +48,7 @@ import {
   Modal,
   Select,
   Space,
+  Spin,
   Table,
   Tabs,
   Tag,
@@ -63,6 +68,7 @@ import {
   DownloadOutlined,
   ArrowDownOutlined,
   CheckCircleOutlined,
+  CloseCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -84,12 +90,14 @@ import {
   mockFileFolders,
   mockFunctionFiles,
   mockManagedFiles,
+  mockTagManagementGroups,
   mockTestCases,
   mockVersions,
 } from '@/mocks/data';
 import type { CaseModule, CaseResult, CaseStep, CaseStepType, TestCase } from '@/types';
 import { CASE_STEP_TYPES } from '@/types';
 import { DynamicValueInput } from '@/components/DynamicValueInput';
+import { CASE_DEBUG_MOCK_STEPS } from '@/constants/caseDebugMockLog';
 import { stringify as stringifyYaml } from 'yaml';
 
 const { Text } = Typography;
@@ -220,6 +228,18 @@ function caseKey(id: string) {
   return `case-${id}`;
 }
 
+/** 在目标目录已规划标题集合中分配不重复的用例标题（必要时追加「副本」链） */
+function allocateCaseNameInUsedTitles(base: string, used: Set<string>): string {
+  if (!used.has(base)) return base;
+  let candidate = `${base}（副本）`;
+  let n = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}（副本${n}）`;
+    n += 1;
+  }
+  return candidate;
+}
+
 function parseTreeKey(key: string): { kind: 'module' | 'case'; id: string } | null {
   if (key.startsWith('case-')) return { kind: 'case', id: key.slice(5) };
   if (key.startsWith('mod-')) return { kind: 'module', id: key.slice(4) };
@@ -331,6 +351,173 @@ function buildModuleOnlyTreeData(modules: CaseModule[], versionId: string): Modu
   return build(null);
 }
 
+function CaseDebugResultLogPanel() {
+  return (
+    <Collapse
+      bordered
+      size="small"
+      defaultActiveKey={['debug-result', 'exec-line', 'test-steps']}
+      style={{ width: '100%' }}
+      items={[
+        {
+          key: 'debug-result',
+          label: '调试结果',
+          children: (
+            <Collapse
+              bordered={false}
+              ghost
+              size="small"
+              defaultActiveKey={['exec-line', 'test-steps']}
+              items={[
+                {
+                  key: 'exec-line',
+                  label: '| 用例执行步骤',
+                  children: (
+                    <Collapse
+                      bordered={false}
+                      ghost
+                      size="small"
+                      defaultActiveKey={['test-steps']}
+                      items={[
+                        {
+                          key: 'test-steps',
+                          label: '测试步骤',
+                          children: (
+                            <div style={{ paddingTop: 4 }}>
+                              {CASE_DEBUG_MOCK_STEPS.map((s, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    marginBottom: 18,
+                                    paddingBottom: 14,
+                                    borderBottom:
+                                      idx < CASE_DEBUG_MOCK_STEPS.length - 1 ? '1px solid #f0f0f0' : undefined,
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                    {s.ok ? (
+                                      <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 3, flexShrink: 0 }} />
+                                    ) : (
+                                      <CloseCircleOutlined style={{ color: '#ff4d4f', marginTop: 3, flexShrink: 0 }} />
+                                    )}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <Text strong style={{ display: 'block', fontSize: 13 }}>
+                                        {s.headline}
+                                      </Text>
+                                      <div style={{ marginTop: 8, fontSize: 12 }}>
+                                        <div>
+                                          <Text>请求地址：</Text>
+                                        </div>
+                                        <div
+                                          style={{
+                                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                            wordBreak: 'break-all',
+                                            marginTop: 2,
+                                          }}
+                                        >
+                                          {s.methodAndUrl}
+                                        </div>
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>请求开始时间：</Text>
+                                        </div>
+                                        <div style={{ marginTop: 2 }}>{s.startTime}</div>
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>请求头：</Text>
+                                        </div>
+                                        {s.requestHeaders ? (
+                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
+                                            {s.requestHeaders}
+                                          </pre>
+                                        ) : null}
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>请求体：</Text>
+                                        </div>
+                                        {s.requestBody ? (
+                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
+                                            {s.requestBody}
+                                          </pre>
+                                        ) : null}
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>响应头：</Text>
+                                        </div>
+                                        {s.responseHeaders ? (
+                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
+                                            {s.responseHeaders}
+                                          </pre>
+                                        ) : null}
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>响应体：</Text>
+                                        </div>
+                                        {s.responseBody ? (
+                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
+                                            {s.responseBody}
+                                          </pre>
+                                        ) : null}
+                                        {s.variableExtract ? (
+                                          <>
+                                            <div style={{ marginTop: 8 }}>
+                                              <Text>变量提取：</Text>
+                                            </div>
+                                            <div
+                                              style={{
+                                                marginTop: 2,
+                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                                wordBreak: 'break-all',
+                                                fontSize: 12,
+                                              }}
+                                            >
+                                              {s.variableExtract}
+                                            </div>
+                                          </>
+                                        ) : null}
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>断言：</Text>
+                                        </div>
+                                        <div style={{ marginTop: 4 }}>
+                                          {s.assertions.map((line, i) => (
+                                            <div
+                                              key={i}
+                                              style={{
+                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                                fontSize: 12,
+                                                wordBreak: 'break-all',
+                                                color: line.includes('[ FAIL ]')
+                                                  ? '#cf1322'
+                                                  : line.includes('[ PASS ]')
+                                                    ? '#237804'
+                                                    : undefined,
+                                                marginBottom: line === '且' ? 2 : 4,
+                                              }}
+                                            >
+                                              {line}
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div style={{ marginTop: 8 }}>
+                                          <Text>请求耗时：</Text>
+                                        </div>
+                                        <div style={{ marginTop: 2 }}>{s.durationSec}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]}
+            />
+          ),
+        },
+      ]}
+    />
+  );
+}
+
 export function CaseManagement() {
   const { versionId = '' } = useParams<{ projectId: string; versionId: string }>();
   const location = useLocation();
@@ -395,6 +582,10 @@ export function CaseManagement() {
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [caseSearch, setCaseSearch] = useState('');
   const [caseListTab, setCaseListTab] = useState<'dir' | 'module' | 'tagGroup'>('dir');
+  /** 目录「标签/分组」Tab：分组 id（单选）与标签名列表（Mock 仅存前端） */
+  const [moduleTagGroupByModuleId, setModuleTagGroupByModuleId] = useState<
+    Record<string, { groupId?: string; tags: string[] }>
+  >({});
   const [leftPaneWidth, setLeftPaneWidth] = useState(22);
   const [isResizing, setIsResizing] = useState(false);
   const splitRef = useRef<HTMLDivElement | null>(null);
@@ -414,6 +605,24 @@ export function CaseManagement() {
   const [copyAssertSource, setCopyAssertSource] = useState<{ caseId: string; stepId: string } | null>(null);
   const [exportCasesOpen, setExportCasesOpen] = useState(false);
   const [exportModuleIds, setExportModuleIds] = useState<string[]>([]);
+  const [copyCasesToModalOpen, setCopyCasesToModalOpen] = useState(false);
+  const [copyCasesToTargetModuleId, setCopyCasesToTargetModuleId] = useState<string | undefined>(undefined);
+  const [caseDebugPhaseByCaseId, setCaseDebugPhaseByCaseId] = useState<
+    Record<string, 'idle' | 'running' | 'done'>
+  >({});
+  const caseDebugTimerRef = useRef<Record<string, number>>({});
+
+  const triggerCaseDebug = useCallback((cid: string) => {
+    const prevT = caseDebugTimerRef.current[cid];
+    if (prevT) window.clearTimeout(prevT);
+    setCaseDebugPhaseByCaseId((p) => ({ ...p, [cid]: 'running' }));
+    caseDebugTimerRef.current[cid] = window.setTimeout(() => {
+      setCaseDebugPhaseByCaseId((p) => ({ ...p, [cid]: 'done' }));
+      delete caseDebugTimerRef.current[cid];
+      message.success('调试完成（Mock）');
+    }, 1600);
+  }, []);
+
   const [moduleEnabledMap, setModuleEnabledMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(mockCaseModules.map((m) => [m.id, true]))
   );
@@ -509,6 +718,37 @@ export function CaseManagement() {
     });
   }, [listRows, caseSearch]);
 
+  const caseDirectoryTagSelectOptions = useMemo(() => {
+    const set = new Set<string>(['smoke', 'P0', 'UI']);
+    cases
+      .filter((c) => c.versionId === versionId)
+      .forEach((c) => (c.tags ?? []).forEach((t) => set.add(t)));
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+      .map((t) => ({ label: t, value: t }));
+  }, [cases, versionId]);
+
+  const caseDirectoryGroupSelectOptions = useMemo(
+    () => mockTagManagementGroups.map((g) => ({ label: g.name, value: g.id })),
+    []
+  );
+
+  const selectedModuleTagGroupCfg = useMemo(() => {
+    if (!selectedModuleId) return { groupId: undefined as string | undefined, tags: [] as string[] };
+    return moduleTagGroupByModuleId[selectedModuleId] ?? { groupId: undefined, tags: [] };
+  }, [selectedModuleId, moduleTagGroupByModuleId]);
+
+  const setSelectedModuleTagGroupPatch = useCallback(
+    (patch: Partial<{ groupId?: string; tags: string[] }>) => {
+      if (!selectedModuleId) return;
+      setModuleTagGroupByModuleId((prev) => {
+        const cur = prev[selectedModuleId] ?? { tags: [] };
+        return { ...prev, [selectedModuleId]: { ...cur, ...patch } };
+      });
+    },
+    [selectedModuleId]
+  );
+
   const selectedModuleName = useMemo(() => {
     if (!selectedModuleId) return '根目录';
     return modules.find((m) => m.id === selectedModuleId)?.name ?? '根目录';
@@ -523,6 +763,13 @@ export function CaseManagement() {
     if (version) return version.toUpperCase();
     return `V${versionId}`;
   }, [location.search, versionId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(caseDebugTimerRef.current).forEach((t) => window.clearTimeout(t));
+      caseDebugTimerRef.current = {};
+    };
+  }, []);
 
   // 默认只展开：根目录本身（一级目录可见，但默认折叠）
   useEffect(() => {
@@ -832,6 +1079,11 @@ export function CaseManagement() {
         const nextMods = modules.filter((m) => m.id !== id);
         setModules(nextMods);
         setModuleEnabledMap((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        setModuleTagGroupByModuleId((prev) => {
           const next = { ...prev };
           delete next[id];
           return next;
@@ -2178,6 +2430,7 @@ export function CaseManagement() {
     const stepId = activeStepByCase[caseId] || list[0]?.id || '';
     const step = list.find((s) => s.id === stepId);
     const stepType: StepType = step ? stepTypeById[step.id] ?? '接口请求' : '接口请求';
+    const debugPhase = caseDebugPhaseByCaseId[caseId] ?? 'idle';
 
     return (
       <div
@@ -2245,18 +2498,40 @@ export function CaseManagement() {
           >
             保存
           </Button>
-          <Button onClick={() => message.info('调试请求已发送（Mock）')}>调试</Button>
+          <Button loading={debugPhase === 'running'} onClick={() => triggerCaseDebug(caseId)}>
+            调试
+          </Button>
         </div>
+        {debugPhase === 'running' ? (
+          <Alert
+            banner
+            type="info"
+            showIcon
+            icon={<Spin size="small" />}
+            message="用例调试运行中…"
+            style={{ marginBottom: 12 }}
+          />
+        ) : null}
         <div
-          className="case-detail-main-grid"
           style={{
-            display: 'grid',
-            gridTemplateColumns: '240px 1fr',
-            gap: 16,
             flex: 1,
             minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0,
           }}
         >
+          <div
+            className="case-detail-main-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '240px 1fr',
+              gap: 16,
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+            }}
+          >
           <Card
             size="small"
             title="步骤"
@@ -3749,6 +4024,21 @@ export function CaseManagement() {
             )}
           </Card>
         </div>
+        {debugPhase === 'done' ? (
+          <div
+            style={{
+              flexShrink: 0,
+              maxHeight: '42vh',
+              overflow: 'auto',
+              borderTop: '1px solid #f0f0f0',
+              background: '#fafafa',
+              padding: '4px 4px 12px',
+            }}
+          >
+            <CaseDebugResultLogPanel />
+          </div>
+        ) : null}
+        </div>
       </div>
     );
   };
@@ -3768,6 +4058,95 @@ export function CaseManagement() {
   const moduleOptions = modules
     .filter((m) => m.versionId === versionId)
     .map((m) => ({ label: m.name, value: m.id }));
+
+  const performBatchCopyCasesToModule = (targetModuleId: string, selectedIds: string[]) => {
+    const sources = selectedIds.map((id) => cases.find((c) => c.id === id)).filter(Boolean) as TestCase[];
+    if (!sources.length) {
+      message.warning('未找到待复制用例');
+      return;
+    }
+    const used = new Set(cases.filter((c) => c.moduleId === targetModuleId).map((c) => c.name));
+    const ts = Date.now();
+    const additions: TestCase[] = [];
+    const stepAdditions: CaseStep[] = [];
+
+    sources.forEach((src, idx) => {
+      const name = allocateCaseNameInUsedTitles(src.name, used);
+      used.add(name);
+      const newId = `tc-${ts}-${idx}-${Math.floor(Math.random() * 10000)}`;
+      additions.push({
+        ...src,
+        id: newId,
+        moduleId: targetModuleId,
+        name,
+        result: '未运行',
+        updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      });
+      const srcSteps = steps
+        .filter((s) => s.caseId === src.id)
+        .sort((a, b) => a.order - b.order);
+      srcSteps.forEach((s, si) => {
+        stepAdditions.push({
+          ...s,
+          id: `st-${ts}-${idx}-${si}-${Math.floor(Math.random() * 10000)}`,
+          caseId: newId,
+        });
+      });
+    });
+
+    setCases((prev) => [...prev, ...additions]);
+    setCaseEnabledMap((prev) => {
+      const next = { ...prev };
+      additions.forEach((c) => {
+        next[c.id] = true;
+      });
+      return next;
+    });
+    setSteps((prev) => [...prev, ...stepAdditions]);
+    message.success(`已复制 ${additions.length} 条用例到目标目录`);
+    setSelectedCaseIds([]);
+    setCopyCasesToModalOpen(false);
+    setCopyCasesToTargetModuleId(undefined);
+  };
+
+  const handleCopyCasesToTargetOk = (): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!copyCasesToTargetModuleId) {
+        message.warning('请选择目标目录');
+        reject(new Error('no-target'));
+        return;
+      }
+      if (selectedCaseIds.length === 0) {
+        message.warning('请先勾选用例');
+        reject(new Error('no-selection'));
+        return;
+      }
+      const target = copyCasesToTargetModuleId;
+      const ids = [...selectedCaseIds];
+      const sources = ids.map((id) => cases.find((c) => c.id === id)).filter(Boolean) as TestCase[];
+      const namesInTarget = new Set(cases.filter((c) => c.moduleId === target).map((c) => c.name));
+      const titleConflictInTarget = sources.some((s) => namesInTarget.has(s.name));
+      if (titleConflictInTarget) {
+        const dupTitles = [
+          ...new Set(sources.filter((s) => namesInTarget.has(s.name)).map((s) => s.name)),
+        ].join('、');
+        Modal.confirm({
+          title: '目标目录用例已存在，请确认',
+          content: `以下用例标题与目标目录已有用例重复：${dupTitles}。确认后将自动追加「副本」等后缀以避免重名。`,
+          okText: '确认复制',
+          cancelText: '取消',
+          onOk: () => {
+            performBatchCopyCasesToModule(target, ids);
+            resolve();
+          },
+          onCancel: () => reject(new Error('cancelled')),
+        });
+        return;
+      }
+      performBatchCopyCasesToModule(target, ids);
+      resolve();
+    });
+
   const sceneTreeData: DataNode[] = [
     {
       key: 'scene-root',
@@ -3812,6 +4191,16 @@ export function CaseManagement() {
         onClick={() => message.info(`批量移动 ${selectedCaseIds.length} 条（待接后端）`)}
       >
         移动到
+      </Button>
+      <Button
+        icon={<CopyOutlined />}
+        disabled={selectedCaseIds.length === 0}
+        onClick={() => {
+          setCopyCasesToTargetModuleId(undefined);
+          setCopyCasesToModalOpen(true);
+        }}
+      >
+        复制到
       </Button>
       <Button
         icon={<CheckCircleOutlined />}
@@ -4081,6 +4470,41 @@ export function CaseManagement() {
                     pagination={{ pageSize: 8, showSizeChanger: true }}
                   />
                 </>
+              ) : caseListTab === 'tagGroup' ? (
+                <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 520, paddingBottom: 24 }}>
+                  <Text type="secondary">
+                    为当前目录配置分组与标签（Mock：切换目录独立记忆；分组选项与「标签/分组」管理页同源；标签选项含本版本用例已出现标签及常用项）。
+                  </Text>
+                  <Form layout="vertical" colon={false} style={{ width: '100%' }}>
+                    <Form.Item label="分组">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="请选择分组（单选，可清空）"
+                        options={caseDirectoryGroupSelectOptions}
+                        value={selectedModuleTagGroupCfg.groupId}
+                        onChange={(v) =>
+                          setSelectedModuleTagGroupPatch({ groupId: v === null || v === undefined ? undefined : String(v) })
+                        }
+                      />
+                    </Form.Item>
+                    <Form.Item label="标签">
+                      <Select
+                        mode="multiple"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="请选择标签（多选，可逐项移除或一键清空）"
+                        options={caseDirectoryTagSelectOptions}
+                        value={selectedModuleTagGroupCfg.tags}
+                        onChange={(v) =>
+                          setSelectedModuleTagGroupPatch({ tags: (v ?? []).map((t) => String(t)) })
+                        }
+                      />
+                    </Form.Item>
+                  </Form>
+                </Space>
               ) : (
                 <Empty
                   description="该 Tab 需求待澄清，暂不展示内容"
@@ -4110,6 +4534,36 @@ export function CaseManagement() {
           />
         )}
       </Card>
+
+      <Modal
+        title="复制到"
+        open={copyCasesToModalOpen}
+        onOk={() => handleCopyCasesToTargetOk()}
+        onCancel={() => {
+          setCopyCasesToModalOpen(false);
+          setCopyCasesToTargetModuleId(undefined);
+        }}
+        okText="确定"
+        cancelText="取消"
+        destroyOnClose
+        width={480}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Text type="secondary">将勾选的用例复制到所选目录（Mock）；步骤会一并复制。</Text>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="请选择目标目录"
+            style={{ width: '100%' }}
+            options={moduleOptions}
+            value={copyCasesToTargetModuleId}
+            onChange={(v) =>
+              setCopyCasesToTargetModuleId(v === undefined || v === null ? undefined : String(v))
+            }
+          />
+        </Space>
+      </Modal>
 
       <Modal
         title="复制步骤到用例"

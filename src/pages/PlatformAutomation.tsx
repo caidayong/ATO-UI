@@ -1,19 +1,24 @@
 /**
  * @page 平台自动化
- * @version V1.0.1
+ * @version V1.0.5
  * @base ATO_V1.0.1-页面需求与交互规格.md 第 3.12 节
  * @changes
  *   - V1.0.1: 按定稿实现单栏布局 + 双环境Tab + 团队下拉（默认全部团队）+ 我创建的过滤。
  *   - V1.0.1: 创建/编辑统一三步向导，编辑模式仅第一步可修改（任务名称/触发方式/发送邮件）。
  *   - V1.0.1: 点击任务名称进入主框架任务详情页，并保留列表筛选参数。
+ *   - V1.0.2: 向导「用例运行配置确认」与「版本用例开发-测试运行」创建任务弹窗的执行范围、并行配置字段与交互对齐（模版仅选用 Mock、一级目录树等同构）。
+ *   - V1.0.3: 平台自动化向导清空并行模版时同步重置分组方式、串并行步骤与并行线程数；移除「另存为模版」（仅测试运行侧支持新增模版）。
+ *   - V1.0.4: 「执行范围」内所属模块/测试套件/标签三项仅用 Space 控制纵向间距，去掉表单项默认下边距叠加，间隔一致且更紧凑。
+ *   - V1.0.5: 并行配置按模块时一级目录 TreeSelect 下拉内增加全选/反选（与测试运行一致）
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
   Card,
   Checkbox,
+  Col,
   DatePicker,
   Empty,
   Form,
@@ -22,6 +27,7 @@ import {
   Modal,
   Pagination,
   Radio,
+  Row,
   Select,
   Space,
   Steps,
@@ -29,6 +35,7 @@ import {
   Tabs,
   Tag,
   TimePicker,
+  Tooltip,
   TreeSelect,
   Typography,
   message,
@@ -40,14 +47,24 @@ import {
   PauseCircleOutlined,
   PlusOutlined,
   PlayCircleOutlined,
-  CloseOutlined,
   SearchOutlined,
+  InfoCircleOutlined,
+  MinusCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { platformAutomationTaskDetailPath } from '@/constants/routes';
-import { mockPlatformTasks, mockPlatformTeams, mockUsers } from '@/mocks/data';
+import {
+  mockCaseModules,
+  mockParallelRunTemplates,
+  mockPlatformTasks,
+  mockPlatformTeams,
+  mockSuites,
+  mockTestCases,
+  mockTagManagementGroups,
+  mockUsers,
+} from '@/mocks/data';
 import type {
   PlatformAutomationTask,
   PlatformEnvTab,
@@ -55,6 +72,19 @@ import type {
   PlatformTaskTriggerType,
   TaskStatus,
 } from '@/types';
+import {
+  MODULE_ROOT_ALL,
+  MODULE_MATCH_OPTIONS,
+  TAG_MATCH_OPTIONS,
+  buildFirstLevelModuleTreeData,
+  collectSelectableFirstLevelLeafIds,
+  invertFirstLevelSelection,
+  maxParallelSelectionCount,
+  parallelPlanSelectionsEqual,
+  pruneParallelPlanStepSelections,
+  selectionUsedInStepsBefore,
+  type ParallelPlanStepForm,
+} from '@/utils/parallelRunWizardShared';
 
 const { Text } = Typography;
 const ALL_TEAM_VALUE = 'all';
@@ -74,28 +104,9 @@ const WEEKDAY_OPTIONS = [
   { label: '周六', value: '周六' },
   { label: '周日', value: '周日' },
 ];
-const MODULE_TREE_OPTIONS = [
-  {
-    title: '根目录',
-    value: '根目录',
-    children: [
-      { title: '主机回收', value: '主机回收' },
-      { title: '登录', value: '登录' },
-      { title: '用户管理', value: '用户管理' },
-      { title: '环境管理', value: '环境管理' },
-      { title: '团队管理', value: '团队管理' },
-      { title: '变更管理', value: '变更管理' },
-      { title: '环境操作', value: '环境操作' },
-      { title: '数据清理', value: '数据清理' },
-      { title: '其他接口（慎用）', value: '其他接口（慎用）' },
-    ],
-  },
-];
-const TAG_SCOPE_OPTIONS = [
-  { label: 'smoke', value: 'smoke' },
-  { label: 'LTT', value: 'LTT' },
-  { label: 'Ops', value: 'Ops' },
-];
+
+/** 与「测试运行」并行配置模版 Mock 同源：按项目 id 过滤 */
+const PLATFORM_PARALLEL_TEMPLATE_PROJECT_ID = '1';
 
 const STATUS_COLOR_MAP: Record<TaskStatus, string> = {
   排队中: 'default',
@@ -121,15 +132,15 @@ type TaskWizardValues = {
   sender?: string;
   receivers?: string[];
   mailTeamId?: string;
-  modulePath: string[];
   moduleMatchType: '包含' | '不包含';
-  tagRules: Array<{
-    matchType?: '等于' | '包含' | '不包含';
-    tag?: string;
-  }>;
-  parallelGroupMode: '按一级模块分组' | '自定义模块分组' | '按分组标签分组';
+  moduleIds: string[];
+  suiteId?: string;
+  tagRows: Array<{ tagMatchType?: '等于' | '包含' | '不包含'; tags?: string[] }>;
+  parallelTemplateId?: string;
+  parallelGroupType: 'module' | 'group';
+  parallelPlanSteps: ParallelPlanStepForm[];
+  parallelThreadCount: number;
   singleCaseTimeoutSec: number;
-  tags?: string[];
   retryCount: number;
   cleanDownloadDir: boolean;
 };
@@ -442,10 +453,13 @@ export function PlatformAutomation() {
       receivers: [],
       mailTeamId: undefined,
       moduleMatchType: '包含',
-      modulePath: [],
-      tagRules: [{ matchType: '等于' }],
-      parallelGroupMode: '按分组标签分组',
-      tags: [],
+      moduleIds: [MODULE_ROOT_ALL],
+      suiteId: undefined,
+      tagRows: [{ tagMatchType: '包含', tags: [] }],
+      parallelTemplateId: undefined,
+      parallelGroupType: 'module',
+      parallelPlanSteps: [],
+      parallelThreadCount: 1,
       singleCaseTimeoutSec: 600,
       retryCount: 0,
       cleanDownloadDir: false,
@@ -472,10 +486,13 @@ export function PlatformAutomation() {
       receivers: [],
       mailTeamId: undefined,
       moduleMatchType: '包含',
-      modulePath: [],
-      tagRules: [{ matchType: '等于', tag: 'smoke' }],
-      parallelGroupMode: '按分组标签分组',
-      tags: ['冒烟场景'],
+      moduleIds: [MODULE_ROOT_ALL],
+      suiteId: undefined,
+      tagRows: [{ tagMatchType: '包含', tags: ['smoke'] }],
+      parallelTemplateId: undefined,
+      parallelGroupType: 'module',
+      parallelPlanSteps: [],
+      parallelThreadCount: 1,
       singleCaseTimeoutSec: 600,
       retryCount: 0,
       cleanDownloadDir: false,
@@ -584,7 +601,14 @@ export function PlatformAutomation() {
       return;
     }
     if (wizardMode === 'create' && wizardStep === 3) {
-      await form.validateFields(['moduleMatchType', 'retryCount', 'singleCaseTimeoutSec', 'parallelGroupMode']);
+      await form.validateFields([
+        'moduleMatchType',
+        'moduleIds',
+        'parallelGroupType',
+        'parallelThreadCount',
+        'retryCount',
+        'singleCaseTimeoutSec',
+      ]);
     }
   };
 
@@ -877,6 +901,89 @@ export function PlatformAutomation() {
     }));
   }, [wizardEnvData, wizardMiddlewareTab]);
 
+  const formVersionWatch = Form.useWatch('version', form);
+  const watchedParallelSteps = Form.useWatch('parallelPlanSteps', form);
+  const watchedParallelGroupType = Form.useWatch('parallelGroupType', form);
+
+  const wizardCaseVersionId = useMemo(
+    () => (formVersionWatch === 'V2.0.1-P1' ? '2' : '1'),
+    [formVersionWatch]
+  );
+  const wizardVersionModules = useMemo(
+    () => mockCaseModules.filter((m) => m.versionId === wizardCaseVersionId),
+    [wizardCaseVersionId]
+  );
+  const wizardVersionCases = useMemo(
+    () => mockTestCases.filter((c) => c.versionId === wizardCaseVersionId),
+    [wizardCaseVersionId]
+  );
+  const wizardModuleSelectOptions = useMemo(() => {
+    const rest = wizardVersionModules.map((m) => ({ label: m.name, value: m.id }));
+    return [{ label: '根目录', value: MODULE_ROOT_ALL }, ...rest];
+  }, [wizardVersionModules]);
+  const wizardTagSelectOptions = useMemo(() => {
+    const s = new Set<string>();
+    wizardVersionCases.forEach((c) => c.tags.forEach((t) => s.add(t)));
+    return Array.from(s).map((t) => ({ label: t, value: t }));
+  }, [wizardVersionCases]);
+  const wizardHasFirstLevelModuleNodes = useMemo(
+    () => buildFirstLevelModuleTreeData(wizardVersionModules).length > 0,
+    [wizardVersionModules]
+  );
+  const wizardTagManagementGroupSelectOptions = useMemo(
+    () => mockTagManagementGroups.map((g) => ({ label: g.name, value: g.id })),
+    []
+  );
+  const suiteSelectOptionsWizard = useMemo(
+    () => mockSuites.map((s) => ({ label: s.name, value: s.id })),
+    []
+  );
+  const platformWizardParallelTemplates = useMemo(
+    () =>
+      mockParallelRunTemplates.filter((t) => t.projectId === PLATFORM_PARALLEL_TEMPLATE_PROJECT_ID),
+    []
+  );
+  const parallelTemplateSelectOptionsWizard = useMemo(
+    () => platformWizardParallelTemplates.map((t) => ({ label: t.name, value: t.id })),
+    [platformWizardParallelTemplates]
+  );
+
+  const appendParallelPlanStep = (step: ParallelPlanStepForm) => {
+    const cur = (form.getFieldValue('parallelPlanSteps') as ParallelPlanStepForm[] | undefined) ?? [];
+    form.setFieldValue('parallelPlanSteps', [...cur, step]);
+  };
+
+  const applyParallelTemplateById = (templateId: string) => {
+    const tpl = platformWizardParallelTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    form.setFieldsValue({
+      parallelGroupType: tpl.parallelGroupType,
+      parallelPlanSteps: tpl.parallelPlanSteps.map((s) => ({
+        stepKind: s.stepKind,
+        selection: [...s.selection],
+      })),
+      parallelThreadCount: tpl.parallelThreadCount,
+    });
+  };
+
+  useEffect(() => {
+    const steps = watchedParallelSteps as ParallelPlanStepForm[] | undefined;
+    if (!steps?.length) return;
+    const pruned = pruneParallelPlanStepSelections(steps);
+    if (!parallelPlanSelectionsEqual(steps, pruned)) {
+      form.setFieldValue('parallelPlanSteps', pruned);
+    }
+  }, [watchedParallelSteps, form]);
+
+  useEffect(() => {
+    const maxSel = maxParallelSelectionCount(watchedParallelSteps as ParallelPlanStepForm[] | undefined);
+    const next = Math.max(1, maxSel);
+    const cur = form.getFieldValue('parallelThreadCount');
+    if (cur !== next) {
+      form.setFieldValue('parallelThreadCount', next);
+    }
+  }, [watchedParallelSteps, form]);
+
   if (wizardMode) {
     const isEditMode = wizardMode === 'edit';
 
@@ -947,9 +1054,13 @@ export function PlatformAutomation() {
               retryCount: 0,
               singleCaseTimeoutSec: 600,
               moduleMatchType: '包含',
-              modulePath: [],
-              tagRules: [{ matchType: '等于' }],
-              parallelGroupMode: '按分组标签分组',
+              moduleIds: [MODULE_ROOT_ALL],
+              suiteId: undefined,
+              tagRows: [{ tagMatchType: '包含', tags: [] }],
+              parallelTemplateId: undefined,
+              parallelGroupType: 'module',
+              parallelPlanSteps: [],
+              parallelThreadCount: 1,
             }}
           >
             {wizardStep === 1 && (
@@ -1428,115 +1539,360 @@ export function PlatformAutomation() {
             {wizardStep === 3 && (
               <Space direction="vertical" style={{ width: '100%' }} size={12}>
                 <Card size="small" title="执行范围" styles={{ body: { background: '#fafafa' } }}>
-                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Space direction="vertical" style={{ width: '100%' }} size={10}>
                     <Form.Item label="所属模块" required style={{ marginBottom: 0 }}>
-                      <Space.Compact style={{ width: '100%' }}>
-                        <Form.Item
-                          name="moduleMatchType"
-                          noStyle
-                          rules={[{ required: true, message: '请选择模块匹配方式' }]}
-                        >
-                          <Select
-                            disabled={isEditMode}
-                            placeholder="请选择"
-                            style={{ width: 120 }}
-                            options={[
-                              { label: '包含', value: '包含' },
-                              { label: '不包含', value: '不包含' },
+                      <Row gutter={8} wrap={false} align="middle">
+                        <Col flex="120px">
+                          <Form.Item
+                            name="moduleMatchType"
+                            noStyle
+                            rules={[{ required: true, message: '请选择' }]}
+                          >
+                            <Select placeholder="请选择" options={MODULE_MATCH_OPTIONS} disabled={isEditMode} />
+                          </Form.Item>
+                        </Col>
+                        <Col flex="auto">
+                          <Form.Item
+                            name="moduleIds"
+                            noStyle
+                            rules={[
+                              { required: true, message: '请选择模块' },
+                              { type: 'array', min: 1, message: '请选择模块' },
                             ]}
-                          />
-                        </Form.Item>
-                        <Form.Item name="modulePath" noStyle>
-                          <TreeSelect
-                            disabled={isEditMode}
-                            placeholder="所有用例（默认）"
-                            style={{ width: 'calc(100% - 120px)' }}
-                            treeData={MODULE_TREE_OPTIONS}
-                            treeCheckable
-                            showSearch
-                            maxTagCount="responsive"
-                            allowClear
-                          />
-                        </Form.Item>
-                      </Space.Compact>
+                          >
+                            <Select
+                              mode="multiple"
+                              placeholder="请选择"
+                              options={wizardModuleSelectOptions}
+                              maxTagCount="responsive"
+                              disabled={isEditMode}
+                            />
+                          </Form.Item>
+                        </Col>
+                      </Row>
                     </Form.Item>
-
-                    <Form.List name="tagRules">
-                      {(fields, { add, remove }) => (
-                        <Form.Item label="标签" style={{ marginBottom: 0 }}>
+                    <Form.Item name="suiteId" label="测试套件" style={{ marginBottom: 0 }}>
+                      <Select
+                        allowClear
+                        placeholder="请选择测试套件（可选）"
+                        options={suiteSelectOptionsWizard}
+                        showSearch
+                        optionFilterProp="label"
+                        disabled={isEditMode}
+                      />
+                    </Form.Item>
+                    <Form.Item label="标签" style={{ marginBottom: 0 }}>
+                      <Form.List name="tagRows">
+                        {(fields, { add, remove }) => (
                           <Space direction="vertical" style={{ width: '100%' }} size={8}>
                             {fields.map((field) => (
-                              <div
-                                key={field.key}
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: '120px 1fr 28px 28px',
-                                  gap: 8,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <Form.Item
-                                  {...field}
-                                  name={[field.name, 'matchType']}
-                                  style={{ marginBottom: 0 }}
-                                >
-                                  <Select
-                                    disabled={isEditMode}
-                                    placeholder="请选择"
-                                    options={[
-                                      { label: '等于', value: '等于' },
-                                      { label: '包含', value: '包含' },
-                                      { label: '不包含', value: '不包含' },
-                                    ]}
-                                  />
-                                </Form.Item>
-                                <Form.Item {...field} name={[field.name, 'tag']} style={{ marginBottom: 0 }}>
-                                  <Select
-                                    disabled={isEditMode}
-                                    placeholder="请选择标签"
-                                    showSearch
-                                    options={TAG_SCOPE_OPTIONS}
-                                  />
-                                </Form.Item>
-                                <Button
-                                  type="text"
-                                  icon={<PlusOutlined />}
-                                  disabled={isEditMode}
-                                  onClick={() => add({ matchType: '等于' })}
-                                />
-                                <Button
-                                  type="text"
-                                  icon={<CloseOutlined />}
-                                  disabled={isEditMode || fields.length <= 1}
-                                  onClick={() => remove(field.name)}
-                                />
-                              </div>
+                              <Row key={field.key} gutter={8} wrap={false} align="middle">
+                                <Col flex="120px">
+                                  <Form.Item
+                                    name={[field.name, 'tagMatchType']}
+                                    rules={[{ required: true, message: '请选择' }]}
+                                    style={{ marginBottom: 0 }}
+                                  >
+                                    <Select placeholder="请选择" options={TAG_MATCH_OPTIONS} disabled={isEditMode} />
+                                  </Form.Item>
+                                </Col>
+                                <Col flex="auto">
+                                  <Form.Item name={[field.name, 'tags']} style={{ marginBottom: 0 }}>
+                                    <Select
+                                      mode="multiple"
+                                      placeholder="请选择标签"
+                                      options={wizardTagSelectOptions}
+                                      allowClear
+                                      maxTagCount="responsive"
+                                      disabled={isEditMode}
+                                    />
+                                  </Form.Item>
+                                </Col>
+                                <Col flex="none">
+                                  <Space size={4}>
+                                    {fields.length > 1 ? (
+                                      <Button
+                                        type="text"
+                                        danger
+                                        icon={<MinusCircleOutlined />}
+                                        disabled={isEditMode}
+                                        onClick={() => remove(field.name)}
+                                        aria-label="删除标签行"
+                                      />
+                                    ) : null}
+                                    {field.name === fields[fields.length - 1]?.name ? (
+                                      <Button
+                                        type="text"
+                                        icon={<PlusOutlined />}
+                                        disabled={isEditMode}
+                                        onClick={() => add({ tagMatchType: '包含', tags: [] })}
+                                        aria-label="添加标签行"
+                                      />
+                                    ) : null}
+                                  </Space>
+                                </Col>
+                              </Row>
                             ))}
                           </Space>
-                        </Form.Item>
-                      )}
-                    </Form.List>
-
+                        )}
+                      </Form.List>
+                    </Form.Item>
                   </Space>
                 </Card>
-                <Card size="small" title="并行配置">
-                  <Form.Item
-                    name="parallelGroupMode"
-                    label="分组"
-                    rules={[{ required: true, message: '请选择分组方式' }]}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Select
-                      disabled={isEditMode}
-                      placeholder="请选择分组方式"
-                      options={[
-                        { label: '按一级模块分组', value: '按一级模块分组' },
-                        { label: '自定义模块分组', value: '自定义模块分组' },
-                        { label: '按分组标签分组', value: '按分组标签分组' },
-                      ]}
-                    />
-                  </Form.Item>
+
+                <Card size="small" title="并行配置" styles={{ body: { background: '#fafafa' } }}>
+                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                    <Form.Item name="parallelTemplateId" style={{ marginBottom: 0 }}>
+                      <Select
+                        allowClear
+                        placeholder="请选择并行配置模版"
+                        options={parallelTemplateSelectOptionsWizard}
+                        showSearch
+                        optionFilterProp="label"
+                        disabled={isEditMode}
+                        onChange={(value) => {
+                          if (isEditMode) return;
+                          if (value) {
+                            applyParallelTemplateById(value as string);
+                            return;
+                          }
+                          form.setFieldsValue({
+                            parallelTemplateId: undefined,
+                            parallelGroupType: 'module',
+                            parallelPlanSteps: [],
+                            parallelThreadCount: 1,
+                          });
+                        }}
+                      />
+                    </Form.Item>
+                    <div style={{ marginBottom: 4 }}>
+                      <Row align="middle" gutter={12} wrap>
+                        <Col flex="none">
+                          <Space size={4}>
+                            <Text type="danger">*</Text>
+                            <Text>分组方式</Text>
+                          </Space>
+                        </Col>
+                        <Col flex="auto">
+                          <Form.Item
+                            name="parallelGroupType"
+                            noStyle
+                            rules={[{ required: true, message: '请选择分组方式' }]}
+                          >
+                            <Radio.Group
+                              disabled={isEditMode}
+                              onChange={() => {
+                                form.setFieldsValue({
+                                  parallelPlanSteps: [],
+                                  parallelThreadCount: 1,
+                                  parallelTemplateId: undefined,
+                                });
+                              }}
+                            >
+                              <Radio value="module">按模块</Radio>
+                              <Radio value="group">按分组</Radio>
+                            </Radio.Group>
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </div>
+                    <Space wrap>
+                      <Button
+                        type="default"
+                        disabled={isEditMode}
+                        onClick={() => appendParallelPlanStep({ stepKind: 'serial', selection: [] })}
+                      >
+                        添加串行步骤
+                      </Button>
+                      <Button
+                        type="default"
+                        disabled={isEditMode}
+                        onClick={() => appendParallelPlanStep({ stepKind: 'parallel', selection: [] })}
+                      >
+                        添加并行步骤
+                      </Button>
+                    </Space>
+                    <Form.List name="parallelPlanSteps">
+                      {(fields, { remove }) => {
+                        const mode = watchedParallelGroupType ?? 'module';
+                        const steps = watchedParallelSteps as ParallelPlanStepForm[] | undefined;
+                        return (
+                          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                            {fields.length === 0 ? (
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                可选：添加串行/并行步骤以配置执行顺序与并行度；前序步骤已选模块/分组在后续步骤中不可再选。
+                              </Text>
+                            ) : null}
+                            {fields.map((field) => {
+                              const blocked = selectionUsedInStepsBefore(steps, field.name);
+                              const curSel = steps?.[field.name]?.selection ?? [];
+                              const rowTreeData = buildFirstLevelModuleTreeData(
+                                wizardVersionModules,
+                                (leafId) => blocked.has(leafId) && !curSel.includes(leafId)
+                              );
+                              const selectableModuleIds = collectSelectableFirstLevelLeafIds(rowTreeData);
+                              const parallelToolbarDisabled =
+                                isEditMode || selectableModuleIds.length === 0;
+                              return (
+                                <Row key={field.key} gutter={8} wrap={false} align="middle">
+                                  <Col flex="none" style={{ minWidth: 88 }}>
+                                    <Space size={6} align="center">
+                                      <Text strong>{Number(field.name) + 1}</Text>
+                                      <Text type="secondary" style={{ fontSize: 12 }}>
+                                        {steps?.[field.name]?.stepKind === 'parallel' ? '并行' : '串行'}
+                                      </Text>
+                                    </Space>
+                                  </Col>
+                                  <Col flex="auto">
+                                    <Form.Item name={[field.name, 'stepKind']} hidden>
+                                      <Input type="hidden" />
+                                    </Form.Item>
+                                    {mode === 'group' ? (
+                                      <Form.Item
+                                        name={[field.name, 'selection']}
+                                        style={{ marginBottom: 0 }}
+                                        rules={[
+                                          {
+                                            validator: async (_, v) => {
+                                              if (Array.isArray(v) && v.length) return;
+                                              throw new Error('请选择分组');
+                                            },
+                                          },
+                                        ]}
+                                      >
+                                        <Select
+                                          mode="multiple"
+                                          placeholder="请选择分组"
+                                          options={wizardTagManagementGroupSelectOptions.map((o) => ({
+                                            ...o,
+                                            disabled: blocked.has(o.value) && !curSel.includes(o.value),
+                                          }))}
+                                          allowClear
+                                          maxTagCount="responsive"
+                                          showSearch
+                                          optionFilterProp="label"
+                                          disabled={isEditMode}
+                                        />
+                                      </Form.Item>
+                                    ) : (
+                                      <Form.Item
+                                        name={[field.name, 'selection']}
+                                        style={{ marginBottom: 0 }}
+                                        rules={[
+                                          {
+                                            validator: async (_, v) => {
+                                              if (Array.isArray(v) && v.length) return;
+                                              throw new Error('请选择一级目录');
+                                            },
+                                          },
+                                        ]}
+                                      >
+                                        <TreeSelect
+                                          treeData={rowTreeData}
+                                          treeCheckable
+                                          showCheckedStrategy={TreeSelect.SHOW_CHILD}
+                                          multiple
+                                          allowClear
+                                          showSearch
+                                          treeNodeFilterProp="title"
+                                          placeholder="请从用例目录树中选择一级目录"
+                                          style={{ width: '100%' }}
+                                          treeDefaultExpandAll
+                                          disabled={isEditMode}
+                                          notFoundContent={
+                                            wizardHasFirstLevelModuleNodes
+                                              ? undefined
+                                              : '当前版本暂无一级子目录'
+                                          }
+                                          dropdownRender={(menu) => (
+                                            <div>
+                                              <div
+                                                style={{
+                                                  padding: '6px 12px',
+                                                  borderBottom: '1px solid #f0f0f0',
+                                                  display: 'flex',
+                                                  gap: 4,
+                                                  flexWrap: 'wrap',
+                                                }}
+                                                onMouseDown={(e) => e.preventDefault()}
+                                              >
+                                                <Button
+                                                  type="link"
+                                                  size="small"
+                                                  style={{ padding: 0, height: 'auto' }}
+                                                  disabled={parallelToolbarDisabled}
+                                                  onClick={() => {
+                                                    form.setFieldValue(
+                                                      ['parallelPlanSteps', field.name, 'selection'],
+                                                      [...selectableModuleIds]
+                                                    );
+                                                  }}
+                                                >
+                                                  全选
+                                                </Button>
+                                                <Button
+                                                  type="link"
+                                                  size="small"
+                                                  style={{ padding: 0, height: 'auto' }}
+                                                  disabled={parallelToolbarDisabled}
+                                                  onClick={() => {
+                                                    const stepsVal = form.getFieldValue(
+                                                      'parallelPlanSteps'
+                                                    ) as ParallelPlanStepForm[] | undefined;
+                                                    const cur = stepsVal?.[field.name]?.selection;
+                                                    form.setFieldValue(
+                                                      ['parallelPlanSteps', field.name, 'selection'],
+                                                      invertFirstLevelSelection(
+                                                        cur,
+                                                        selectableModuleIds
+                                                      )
+                                                    );
+                                                  }}
+                                                >
+                                                  反选
+                                                </Button>
+                                              </div>
+                                              {menu}
+                                            </div>
+                                          )}
+                                        />
+                                      </Form.Item>
+                                    )}
+                                  </Col>
+                                  <Col flex="none">
+                                    <Button
+                                      type="text"
+                                      danger
+                                      icon={<MinusCircleOutlined />}
+                                      disabled={isEditMode}
+                                      onClick={() => remove(field.name)}
+                                      aria-label="删除该步骤"
+                                    />
+                                  </Col>
+                                </Row>
+                              );
+                            })}
+                          </Space>
+                        );
+                      }}
+                    </Form.List>
+                    <Form.Item
+                      name="parallelThreadCount"
+                      label={
+                        <Space size={4}>
+                          并行线程数
+                          <Tooltip title="随各「并行」步骤中单步多选数量自动同步（多步取最大，至少为 1），也可手动修改">
+                            <InfoCircleOutlined />
+                          </Tooltip>
+                        </Space>
+                      }
+                      rules={[{ required: true, message: '请输入并行线程数' }]}
+                    >
+                      <InputNumber min={1} max={99} style={{ width: '100%' }} disabled={isEditMode} />
+                    </Form.Item>
+                  </Space>
                 </Card>
+
                 <Form.Item
                   name="retryCount"
                   label="失败重试次数"
@@ -1544,11 +1900,7 @@ export function PlatformAutomation() {
                 >
                   <InputNumber min={0} style={{ width: 240 }} disabled={isEditMode} />
                 </Form.Item>
-                <Form.Item
-                  label="单用例最大执行超时时长"
-                  required
-                  style={{ marginBottom: 24 }}
-                >
+                <Form.Item label="单用例最大执行超时时长" required style={{ marginBottom: 24 }}>
                   <Space>
                     <Form.Item
                       name="singleCaseTimeoutSec"

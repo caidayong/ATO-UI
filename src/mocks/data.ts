@@ -14,21 +14,34 @@ import type {
   PlanOperationLog,
   PlanChangeRequest,
   ResumeRecord,
+  VersionSuite,
+  MarketDefect,
+  AnalysisReportTask,
+  ApiEnvironment,
+  ApiCategory,
+  ApiDefinition,
 } from '../types';
 
+/** 与 `MARKET_DEFECT_ACTUAL_TEAM_OPTIONS`、市场缺陷/分析报告下拉同源（基础数据 · 团队管理） */
 export const mockTeams: Team[] = [
-  { id: '1', name: '支付组', memberCount: 8 },
-  { id: '2', name: '订单组', memberCount: 4 },
-  { id: '3', name: '用户组', memberCount: 2 },
-  { id: '4', name: '风控组', memberCount: 2 },
+  { id: '1', name: 'S17', memberCount: 3 },
+  { id: '2', name: '中台', memberCount: 3 },
+  { id: '3', name: 'FT', memberCount: 3 },
+  { id: '4', name: '出租', memberCount: 2 },
+  { id: '5', name: '校车', memberCount: 2 },
+  { id: '6', name: '公交', memberCount: 1 },
+  { id: '7', name: '前装', memberCount: 1 },
 ];
 
 /** 团队 → 成员 userId 列表（与 mockUsers 对齐，供基础数据页团队管理） */
 export const mockTeamMemberIds: Record<string, string[]> = {
-  '1': ['1', '2', '3', '4', '5', '6', '7', '8'],
-  '2': ['9', '10', '11', '12'],
-  '3': ['2', '5'],
-  '4': ['3', '4'],
+  '1': ['1', '2', '3'],
+  '2': ['4', '5', '6'],
+  '3': ['7', '8', '9'],
+  '4': ['10', '11'],
+  '5': ['12', '13'],
+  '6': ['14'],
+  '7': ['15'],
 };
 
 export const mockUsers: User[] = [
@@ -54,7 +67,7 @@ export const mockProjects: Project[] = [
     id: '1',
     name: 'ATO-支付回归',
     autoType: '接口自动化',
-    team: '支付组',
+    team: 'S17',
     projectType: '平台项目',
     region: '深圳',
     createdAt: '2024-01-15 10:30',
@@ -64,7 +77,7 @@ export const mockProjects: Project[] = [
     id: '2',
     name: 'ATO-订单回归',
     autoType: 'UI自动化',
-    team: '订单组',
+    team: '中台',
     projectType: '平台项目',
     region: '重庆',
     createdAt: '2024-02-01 09:15',
@@ -74,7 +87,7 @@ export const mockProjects: Project[] = [
     id: '3',
     name: 'ATO-用户中心',
     autoType: '接口自动化',
-    team: '用户组',
+    team: 'FT',
     projectType: '整机项目',
     region: '成都',
     createdAt: '2024-01-20 11:00',
@@ -84,7 +97,7 @@ export const mockProjects: Project[] = [
     id: '4',
     name: 'ATO-风控核心',
     autoType: '接口自动化',
-    team: '风控组',
+    team: '出租',
     projectType: '整机项目',
     region: '深圳',
     createdAt: '2024-02-10 14:20',
@@ -94,7 +107,7 @@ export const mockProjects: Project[] = [
     id: '5',
     name: 'ATO-支付国际化',
     autoType: 'UI自动化',
-    team: '支付组',
+    team: '校车',
     projectType: '平台项目',
     region: '重庆',
     createdAt: '2024-03-01 10:00',
@@ -169,6 +182,58 @@ export const mockCaseModules: CaseModule[] = [
   { id: 'mod-pay-recon', versionId: '1', parentId: 'mod-pay-root', name: '对账流程', sort: 50 },
   { id: 'mod-v2-root', versionId: '2', parentId: null, name: 'v1.2.0 模块', sort: 10 },
   { id: 'mod-v3-root', versionId: '3', parentId: null, name: '订单回归', sort: 10 },
+];
+
+/**
+ * 「标签/分组」页分组 Tab 的 Mock 数据源（与 `TagManagement` 分组列表同源，供测试运行并行配置「按分组」下拉使用）
+ */
+export type TagManagementGroupRecord = {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+};
+
+/** 测试运行 · 创建任务「并行配置模版」快照（按项目 Mock，与后台持久化概念对齐） */
+export type ParallelRunTemplateSnapshot = {
+  id: string;
+  projectId: string;
+  name: string;
+  parallelGroupType: 'module' | 'group';
+  parallelPlanSteps: Array<{ stepKind: 'serial' | 'parallel'; selection: string[] }>;
+  parallelThreadCount: number;
+};
+
+export const mockParallelRunTemplates: ParallelRunTemplateSnapshot[] = [
+  {
+    id: 'prt-001',
+    projectId: '1',
+    name: '支付核心-串后并',
+    parallelGroupType: 'module',
+    parallelPlanSteps: [
+      { stepKind: 'serial', selection: ['mod-pay-order'] },
+      { stepKind: 'parallel', selection: ['mod-pay-refund', 'mod-pay-coupon'] },
+    ],
+    parallelThreadCount: 2,
+  },
+  {
+    id: 'prt-002',
+    projectId: '1',
+    name: '冒烟分组并行',
+    parallelGroupType: 'group',
+    parallelPlanSteps: [{ stepKind: 'parallel', selection: ['grp-1', 'grp-2'] }],
+    parallelThreadCount: 2,
+  },
+];
+
+export const mockTagManagementGroups: TagManagementGroupRecord[] = [
+  { id: 'grp-1', name: 'N9M1.0下载', description: '', createdAt: '2026-03-30 09:20', createdBy: 'A12345（张三）' },
+  { id: 'grp-2', name: 'N9M2.0下载', description: '', createdAt: '2026-03-30 09:25', createdBy: 'A12345（张三）' },
+  { id: 'grp-3', name: '1078-H5媒体', description: '', createdAt: '2026-03-30 09:30', createdBy: 'A12346（李四）' },
+  { id: 'grp-4', name: '808-H5媒体', description: '', createdAt: '2026-03-30 09:35', createdBy: 'A12346（李四）' },
+  { id: 'grp-5', name: '初始化', description: '', createdAt: '2026-03-30 09:40', createdBy: 'A12347（王五）' },
+  { id: 'grp-6', name: '后置数据清理', description: '', createdAt: '2026-03-30 09:45', createdBy: 'A12347（王五）' },
 ];
 
 export const mockTestCases: TestCase[] = [
@@ -1039,3 +1104,546 @@ export const mockResumeRecords: ResumeRecord[] = [
     remark: '板卡料号未维护（验收样例）',
   },
 ];
+
+/** 版本用例开发 · 套件管理（V1.0.1-P5 Mock） */
+export const mockSuites: VersionSuite[] = [
+  {
+    id: 'suite-smoke',
+    name: '冒烟',
+    scopeSummary: '模块：包含「下单流程、风控校验」。标签条件：包含「smoke、P0」。',
+    description: '版本发布前冒烟',
+    createdAt: '2026-05-09 10:00:00',
+    createdBy: 'A12345（张三）',
+    scope: {
+      moduleRows: [
+        {
+          relation: 'include',
+          moduleIds: ['mod-pay-order', 'mod-pay-risk'],
+        },
+      ],
+      tagRows: [{ relation: 'include', tags: ['smoke', 'P0'] }],
+    },
+  },
+  {
+    id: 'suite-download',
+    name: '下载',
+    scopeSummary: '模块：包含「根目录（全部子模块）」。标签条件：无。',
+    description: '下载链路相关用例',
+    createdAt: '2026-05-10 09:15:00',
+    createdBy: 'A12346（李四）',
+    scope: {
+      moduleRows: [{ relation: 'include', moduleIds: ['__root_all__'] }],
+      tagRows: [],
+    },
+  },
+  {
+    id: 'suite-media',
+    name: '媒体',
+    scopeSummary: '模块：不包含「退款流程」。标签条件：等于「UI」。',
+    description: '媒体与 UI 回归',
+    createdAt: '2026-05-10 11:00:00',
+    createdBy: 'A12347（王五）',
+    scope: {
+      moduleRows: [
+        {
+          relation: 'exclude',
+          moduleIds: ['mod-pay-refund'],
+        },
+      ],
+      tagRows: [{ relation: 'eq', tags: ['UI'] }],
+    },
+  },
+  {
+    id: 'suite-pas',
+    name: 'pas',
+    scopeSummary: '模块：包含「优惠券流程」。标签条件：不包含「risk」。',
+    description: 'PAS 场景套件',
+    createdAt: '2026-05-11 08:20:00',
+    createdBy: 'A12348（赵六）',
+    scope: {
+      moduleRows: [{ relation: 'include', moduleIds: ['mod-pay-coupon'] }],
+      tagRows: [{ relation: 'exclude', tags: ['risk'] }],
+    },
+  },
+  {
+    id: 'suite-hsms',
+    name: 'hsms',
+    scopeSummary: '模块：包含「对账流程」。标签条件：包含「recon」。',
+    description: 'HSMS 对账相关',
+    createdAt: '2026-05-11 09:30:00',
+    createdBy: 'A12349（钱七）',
+    scope: {
+      moduleRows: [{ relation: 'include', moduleIds: ['mod-pay-recon'] }],
+      tagRows: [{ relation: 'include', tags: ['recon'] }],
+    },
+  },
+];
+
+/** 市场缺陷列表（V1.0.1-P5 Mock，枚举值见 `marketDefectMockOptions`） */
+export const mockMarketDefects: MarketDefect[] = [
+  {
+    id: 'MD-10001',
+    defectSource: '市场缺陷',
+    title: '前装设备偶现重启',
+    createdAt: '2026-05-01 09:00:00',
+    defectType: '功能问题',
+    productLine: '国内货运',
+    defectOwnerTeam: '中台',
+    validIssue: '是',
+    actualTeam: '前装',
+    mainResponsibilityAttribution: '测试',
+    mainResponsiblePerson: '张三',
+    leakageReason: '用例设计缺失或错误',
+    improvementMeasure: '补充低温长稳用例并纳入回归',
+    improvementOwner: '张三',
+    completionProgress: 72,
+    autoCovered: '否',
+    canCover: '是',
+    uncoveredReason: '—',
+    autoMissReason: '脚本未调度夜间压测',
+  },
+  {
+    id: 'MD-10002',
+    defectSource: '生产反馈',
+    title: '海外节点回调超时',
+    createdAt: '2026-05-02 14:20:00',
+    defectType: '性能问题',
+    productLine: '海外货运',
+    defectOwnerTeam: '业务软件部-海外货运组',
+    validIssue: '是',
+    actualTeam: '中台',
+    mainResponsibilityAttribution: '开发',
+    mainResponsiblePerson: '李四',
+    leakageReason: '设计实现缺失或错误',
+    improvementMeasure: '对齐超时阈值与重试策略',
+    improvementOwner: '李四',
+    completionProgress: 45,
+    autoCovered: '是',
+    canCover: '否',
+    uncoveredReason: '现网证书链差异不可在测试环境完全模拟',
+    autoMissReason: '—',
+  },
+  {
+    id: 'MD-10003',
+    defectSource: '系统验证',
+    title: '公交报站与图层错位',
+    createdAt: '2026-04-28 10:00:00',
+    defectType: '兼容问题',
+    productLine: '公交',
+    defectOwnerTeam: '业务软件部-公交组',
+    validIssue: '否',
+    actualTeam: '公交',
+    mainResponsibilityAttribution: '产品',
+    mainResponsiblePerson: '王五',
+    leakageReason: '需求导入缺失或错误',
+    improvementMeasure: '建立文案与坐标系走查清单',
+    improvementOwner: '王五',
+    completionProgress: 100,
+    autoCovered: '否',
+    canCover: '是',
+    uncoveredReason: '—',
+    autoMissReason: '视觉回归未包含该弹窗状态',
+  },
+  {
+    id: 'MD-10004',
+    defectSource: 'beta-bug',
+    title: '公交电子围栏校验绕过',
+    createdAt: '2026-05-03 11:05:00',
+    defectType: '安全问题',
+    productLine: '轨交',
+    defectOwnerTeam: '业务软件部-公交组',
+    validIssue: '是',
+    actualTeam: '公交',
+    mainResponsibilityAttribution: '运维',
+    mainResponsiblePerson: '赵六',
+    leakageReason: '环境配置问题',
+    improvementMeasure: '加固围栏校验与审计日志',
+    improvementOwner: '赵六',
+    completionProgress: 30,
+    autoCovered: '否',
+    canCover: '是',
+    uncoveredReason: '—',
+    autoMissReason: '安全扫描规则未覆盖该接口',
+  },
+  {
+    id: 'MD-10005',
+    defectSource: '市场缺陷',
+    title: '创新工业报表导出字段缺失',
+    createdAt: '2026-05-04 08:40:00',
+    defectType: '需求问题',
+    productLine: '创新工业',
+    defectOwnerTeam: '中台',
+    validIssue: '是',
+    actualTeam: 'FT',
+    mainResponsibilityAttribution: '产品',
+    mainResponsiblePerson: '钱七',
+    leakageReason: '验证方案缺失或错误',
+    improvementMeasure: '导出场景纳入验收用例集',
+    improvementOwner: '钱七',
+    completionProgress: 88,
+    autoCovered: '是',
+    canCover: '否',
+    uncoveredReason: '历史版本字段与现网不一致',
+    autoMissReason: '—',
+  },
+  {
+    id: 'MD-10006',
+    defectSource: '生产反馈',
+    title: '出租计价与重复订单提示',
+    createdAt: '2026-05-05 16:12:00',
+    defectType: '重复问题',
+    productLine: '出租',
+    defectOwnerTeam: '业务软件部-出租组',
+    validIssue: '否',
+    actualTeam: '出租',
+    mainResponsibilityAttribution: '测试',
+    mainResponsiblePerson: '孙八',
+    leakageReason: '产品使用问题',
+    improvementMeasure: '优化重复下单拦截与提示文案',
+    improvementOwner: '孙八',
+    completionProgress: 12,
+    autoCovered: '否',
+    canCover: '是',
+    uncoveredReason: '—',
+    autoMissReason: '未覆盖弱网双击提交',
+  },
+  {
+    id: 'MD-10007',
+    defectSource: '系统验证',
+    title: '校车离线包升级失败',
+    createdAt: '2026-05-06 10:00:00',
+    defectType: '功能问题',
+    productLine: '国内货运',
+    defectOwnerTeam: '客户端问题',
+    validIssue: '是',
+    actualTeam: '校车',
+    mainResponsibilityAttribution: '开发',
+    mainResponsiblePerson: '周九',
+    leakageReason: '升级部署执行异常',
+    improvementMeasure: '升级脚本增加校验与回滚',
+    improvementOwner: '周九',
+    completionProgress: 55,
+    autoCovered: '是',
+    canCover: '是',
+    uncoveredReason: '—',
+    autoMissReason: '—',
+  },
+  {
+    id: 'MD-10008',
+    defectSource: 'beta-bug',
+    title: 'S17 渣土轨迹漂移',
+    createdAt: '2026-05-07 09:30:00',
+    defectType: '性能问题',
+    productLine: '国内货运',
+    defectOwnerTeam: 'S17',
+    validIssue: '是',
+    actualTeam: 'S17',
+    mainResponsibilityAttribution: '开发',
+    mainResponsiblePerson: '吴十',
+    leakageReason: '设计实现缺失或错误',
+    improvementMeasure: '优化定位滤波与采样频率',
+    improvementOwner: '吴十',
+    completionProgress: 63,
+    autoCovered: '否',
+    canCover: '是',
+    uncoveredReason: '—',
+    autoMissReason: '实车路测样本不足',
+  },
+];
+
+/** 市场缺陷分析 ·「分析报告」Tab 列表（V1.0.1-P5 Mock） */
+export const mockAnalysisReportTasks: AnalysisReportTask[] = [
+  {
+    reportId: 'RPT-10001',
+    reportName: '2026Q1 市场缺陷复盘',
+    teamName: '出租',
+    timeRange: '2026年 Q1 3月 · 实际归属团队:公交 · RDMS:RDMS-P-782301',
+    creator: '李四',
+    createdAt: '2026-05-09 11:00:00',
+    validDefectTotal: '186',
+    productDefectLeakRate: '0.9%',
+    leakRate: '2.3%',
+    status: '进行中',
+    scopeYear: '2026',
+    scopeQuarter: 'Q1',
+    scopeMonth: '3月',
+    scopeActualTeam: '公交',
+    rdmsProductIds: ['RDMS-P-782301'],
+    productOwner: '张产品',
+    devOwner: '李开发',
+    testOwner: '王测试',
+  },
+  {
+    reportId: 'RPT-10002',
+    reportName: '支付域缺陷汇总',
+    teamName: 'S17',
+    timeRange: '2026年 全部(季) 4月 · 实际归属团队:全部',
+    creator: '王五',
+    createdAt: '2026-05-08 16:00:00',
+    validDefectTotal: '92',
+    productDefectLeakRate: '0.4%',
+    leakRate: '0.8%',
+    status: '已完成',
+    scopeYear: '2026',
+    scopeQuarter: '全部',
+    scopeMonth: '4月',
+    scopeActualTeam: '全部',
+    rdmsProductIds: ['RDMS-P-901122', 'RDMS-P-334455'],
+    productOwner: '赵产品',
+    devOwner: '钱开发',
+    testOwner: '孙测试',
+  },
+  {
+    reportId: 'RPT-10003',
+    reportName: '异常报告样例',
+    teamName: '前装',
+    timeRange: '2026年 Q1 全部(月) · 实际归属团队:中台 · RDMS:RDMS-P-556677',
+    creator: '赵六',
+    createdAt: '2026-05-07 09:00:00',
+    validDefectTotal: '—',
+    productDefectLeakRate: '—',
+    leakRate: '—',
+    status: '异常',
+    scopeYear: '2026',
+    scopeQuarter: 'Q1',
+    scopeMonth: '全部',
+    scopeActualTeam: '中台',
+    rdmsProductIds: ['RDMS-P-556677'],
+    productOwner: '周产品',
+    devOwner: '吴开发',
+    testOwner: '郑测试',
+  },
+];
+
+/** 接口管理：环境列表 */
+export const mockApiEnvironments: ApiEnvironment[] = [
+  { id: 'env-sit', name: 'SIT测试环境', baseUrl: 'https://api-sit.company.com', isDefault: true },
+  { id: 'env-uat', name: 'UAT环境', baseUrl: 'https://api-uat.company.com' },
+  { id: 'env-dev', name: 'DEV开发环境', baseUrl: 'https://api-dev.company.com' },
+];
+
+/** 接口管理：接口目录（树形结构） */
+export const mockApiCategories: ApiCategory[] = [
+  // root
+  { id: 'root', parentId: null, name: 'root', sort: 0, createdAt: '2024-01-01 10:00:00', createdBy: '系统' },
+  // 环境-基础
+  { id: 'cat-env-base', parentId: 'root', name: '环境-基础', sort: 10, description: '环境基础操作相关接口', createdAt: '2024-01-10 10:00:00', createdBy: 'A12345（张三）' },
+  // 环境-配置映射
+  { id: 'cat-env-config', parentId: 'root', name: '环境-配置映射', sort: 20, description: '环境配置映射管理', createdAt: '2024-01-15 14:30:00', createdBy: 'A12346（李四）' },
+  // 环境-变量
+  { id: 'cat-env-var', parentId: 'root', name: '环境-变量', sort: 30, description: '环境变量管理', createdAt: '2024-01-20 09:15:00', createdBy: 'A12347（王五）' },
+  // 环境-UI
+  { id: 'cat-env-ui', parentId: 'root', name: '环境-UI', sort: 40, description: '环境UI相关接口', createdAt: '2024-02-01 11:00:00', createdBy: 'A12348（赵六）' },
+  // 环境-部署模型
+  { id: 'cat-env-deploy', parentId: 'root', name: '环境-部署模型', sort: 50, description: '部署模型管理', createdAt: '2024-02-10 16:20:00', createdBy: 'A12349（钱七）' },
+  // 环境-版本快照
+  { id: 'cat-env-snapshot', parentId: 'root', name: '环境-版本快照', sort: 60, description: '版本快照管理', createdAt: '2024-02-15 10:30:00', createdBy: 'A12350（孙八）' },
+  // 环境-执行模块-编辑
+  { id: 'cat-env-exec-edit', parentId: 'root', name: '环境-执行模块-编辑', sort: 70, description: '执行模块编辑接口', createdAt: '2024-02-20 14:00:00', createdBy: 'A12351（周九）' },
+  // 环境-执行模块-运行
+  { id: 'cat-env-exec-run', parentId: 'root', name: '环境-执行模块-运行', sort: 80, description: '执行模块运行接口', createdAt: '2024-02-25 09:45:00', createdBy: 'A12352（吴十）' },
+];
+
+/** 接口管理：接口定义列表 */
+export const mockApiDefinitions: ApiDefinition[] = [
+  // 环境-基础 下的接口
+  {
+    id: 'api-001',
+    categoryId: 'cat-env-base',
+    name: '环境分页查询',
+    method: 'POST',
+    path: '/oms/env/query_page',
+    type: 'API',
+    description: '分页查询环境列表',
+    createdAt: '2024-03-01 10:00:00',
+    createdBy: 'A12345（张三）',
+    updatedAt: '2024-03-10 15:30:00',
+    remark: '—',
+    requestProtocol: 'HTTP',
+    pathParams: [
+      { name: 'server_ip', defaultValue: '', required: false, description: '—' },
+      { name: 'server_port', defaultValue: '', required: false, description: '—' },
+    ],
+    queryParams: [
+      { name: 'type', defaultValue: 'page', required: false, description: '分页类型' },
+      { name: 'pageNo', defaultValue: '1', required: false, description: '页码' },
+      { name: 'pageSize', defaultValue: '20', required: false, description: '每页条数' },
+    ],
+    scenarios: [
+      { id: 'sc-001-1', apiId: 'api-001', name: '查询环境列表' },
+      { id: 'sc-001-2', apiId: 'api-001', name: '查询变更计划列表' },
+      { id: 'sc-001-3', apiId: 'api-001', name: '查询模板-20条/页' },
+      { id: 'sc-001-4', apiId: 'api-001', name: '查询指定环境的变更计划' },
+      { id: 'sc-001-5', apiId: 'api-001', name: '默认分页查询' },
+    ],
+  },
+  {
+    id: 'api-002',
+    categoryId: 'cat-env-base',
+    name: '查询环境列表',
+    method: 'POST',
+    path: '/oms/env/list',
+    type: 'API',
+    description: '查询所有环境列表',
+    createdAt: '2024-03-02 11:00:00',
+    createdBy: 'A12346（李四）',
+    updatedAt: '2024-03-12 09:20:00',
+    remark: '',
+    requestProtocol: 'HTTP',
+    pathParams: [],
+    queryParams: [{ name: 'envType', defaultValue: '', required: false, description: '环境类型' }],
+    scenarios: [
+      { id: 'sc-002-1', apiId: 'api-002', name: '全部环境列表' },
+      { id: 'sc-002-2', apiId: 'api-002', name: '仅 SIT 环境' },
+    ],
+  },
+  {
+    id: 'api-003',
+    categoryId: 'cat-env-base',
+    name: '查询变更计划列表',
+    method: 'POST',
+    path: '/oms/env/plan/list',
+    type: 'API',
+    description: '查询环境变更计划列表',
+    createdAt: '2024-03-03 14:30:00',
+    createdBy: 'A12347（王五）',
+    updatedAt: '2024-03-15 16:45:00',
+    requestProtocol: 'HTTP',
+    pathParams: [],
+    queryParams: [],
+    scenarios: [{ id: 'sc-003-1', apiId: 'api-003', name: '激活中计划列表' }],
+  },
+  {
+    id: 'api-004',
+    categoryId: 'cat-env-base',
+    name: '查询模板-20条/页',
+    method: 'POST',
+    path: '/oms/env/template/query',
+    type: 'API',
+    description: '查询环境模板，默认20条每页',
+    createdAt: '2024-03-04 09:15:00',
+    createdBy: 'A12348（赵六）',
+    updatedAt: '2024-03-16 11:30:00',
+  },
+  {
+    id: 'api-005',
+    categoryId: 'cat-env-base',
+    name: '查询指定环境的变更计划-2...',
+    method: 'POST',
+    path: '/oms/env/plan/detail',
+    type: 'API',
+    description: '查询指定环境的变更计划详情',
+    createdAt: '2024-03-05 16:20:00',
+    createdBy: 'A12349（钱七）',
+    updatedAt: '2024-03-18 14:10:00',
+  },
+  {
+    id: 'api-006',
+    categoryId: 'cat-env-base',
+    name: '环境容器创建',
+    method: 'POST',
+    path: '/oms/env/create',
+    type: 'API',
+    description: '创建新的环境容器',
+    createdAt: '2024-03-06 10:45:00',
+    createdBy: 'A12350（孙八）',
+    updatedAt: '2024-03-20 09:30:00',
+  },
+  {
+    id: 'api-007',
+    categoryId: 'cat-env-base',
+    name: '获取基础信息',
+    method: 'POST',
+    path: '/oms/env/info/get',
+    type: 'API',
+    description: '获取环境基础信息',
+    createdAt: '2024-03-07 13:00:00',
+    createdBy: 'A12351（周九）',
+    updatedAt: '2024-03-22 15:00:00',
+  },
+  {
+    id: 'api-008',
+    categoryId: 'cat-env-base',
+    name: '环境拷贝',
+    method: 'POST',
+    path: '/env/core/copy',
+    type: 'API',
+    description: '拷贝环境配置',
+    createdAt: '2024-03-08 11:30:00',
+    createdBy: 'A12352（吴十）',
+    updatedAt: '2024-03-25 10:20:00',
+  },
+  {
+    id: 'api-009',
+    categoryId: 'cat-env-base',
+    name: '变更应用',
+    method: 'POST',
+    path: '/oms/env/plan/apply',
+    type: 'API',
+    description: '应用环境变更计划',
+    createdAt: '2024-03-09 09:00:00',
+    createdBy: 'A12345（张三）',
+    updatedAt: '2024-03-26 14:45:00',
+  },
+  {
+    id: 'api-010',
+    categoryId: 'cat-env-base',
+    name: '放弃变更计划',
+    method: 'POST',
+    path: '/oms/env/plan/abandon',
+    type: 'API',
+    description: '放弃当前变更计划',
+    createdAt: '2024-03-10 15:00:00',
+    createdBy: 'A12346（李四）',
+    updatedAt: '2024-03-28 11:15:00',
+  },
+  {
+    id: 'api-011',
+    categoryId: 'cat-env-base',
+    name: '变更清单查询',
+    method: 'POST',
+    path: '/oms/env/change/list',
+    type: 'API',
+    description: '查询变更清单',
+    createdAt: '2024-03-11 10:30:00',
+    createdBy: 'A12347（王五）',
+    updatedAt: '2024-03-29 16:00:00',
+  },
+  {
+    id: 'api-012',
+    categoryId: 'cat-env-base',
+    name: '查询激活状态变更计划',
+    method: 'POST',
+    path: '/oms/env/plan/get_active',
+    type: 'API',
+    description: '查询当前激活的变更计划',
+    createdAt: '2024-03-12 14:00:00',
+    createdBy: 'A12348（赵六）',
+    updatedAt: '2024-03-30 09:45:00',
+  },
+  {
+    id: 'api-013',
+    categoryId: 'cat-env-base',
+    name: '删除环境',
+    method: 'POST',
+    path: '/oms/env/del',
+    type: 'API',
+    description: '删除指定环境',
+    createdAt: '2024-03-13 11:20:00',
+    createdBy: 'A12349（钱七）',
+    updatedAt: '2024-04-01 13:30:00',
+  },
+];
+
+/** 辅助函数：根据目录ID获取接口列表 */
+export function getApisByCategoryId(categoryId: string): ApiDefinition[] {
+  return mockApiDefinitions.filter(api => api.categoryId === categoryId);
+}
+
+/** 辅助函数：获取目录下接口数量（包含子目录） */
+export function getApiCountByCategory(categoryId: string): number {
+  const directCount = mockApiDefinitions.filter(api => api.categoryId === categoryId).length;
+  const childCategories = mockApiCategories.filter(cat => cat.parentId === categoryId);
+  const childCount = childCategories.reduce((sum, child) => sum + getApiCountByCategory(child.id), 0);
+  return directCount + childCount;
+}
