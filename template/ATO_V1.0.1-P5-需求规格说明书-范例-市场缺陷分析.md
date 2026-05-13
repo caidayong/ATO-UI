@@ -381,22 +381,22 @@ flowchart TB
    1. 自「是否有效问题」至「自动化未发现原因」（不含操作列）：**双击**进入编辑。  
    2. **优化措施**：`Input` 文本，**blur / Enter** 提交。  
    3. **完成进度**：数字 + 进度预览，**确定 / Enter** 提交，**取消** 放弃未保存编辑（**不提供 Esc 快捷键取消**，与本节下文一致）。  
-   4. **`Select` 类可编辑列（选中即提交并退出编辑）— 各字段可选值须在产品/SRS 与实现对齐；首版 Mock 与工程常量 **一一对应**，开发以常量名为准接入（后续接入基础数据或枚举接口时替换数据源，交互不变）：  
-      | 列表字段（列标题） | 可选项来源（工程常量 / 说明） |
-      | --- | --- |
-      | 是否有效问题 | `MARKET_DEFECT_YES_NO_OPTIONS`（是 / 否） |
-      | 实际归属团队 | `MARKET_DEFECT_ACTUAL_TEAM_OPTIONS` |
-      | 缺陷类型 | `MARKET_DEFECT_TYPE_OPTIONS` |
-      | 主要责任归属 | `MARKET_DEFECT_MAIN_RESP_ATTRIBUTION_OPTIONS` |
-      | 主要责任人 | `MARKET_DEFECT_OWNER_PERSON_OPTIONS` |
-      | 流出原因 | `MARKET_DEFECT_LEAKAGE_REASON_OPTIONS` |
-      | 优化责任人 | `MARKET_DEFECT_OWNER_PERSON_OPTIONS`（与主要责任人同源 Mock） |
-      | 自动化是否覆盖 | `MARKET_DEFECT_YES_NO_OPTIONS` |
-      | 是否可覆盖 | `MARKET_DEFECT_YES_NO_OPTIONS` |
-      | 不可覆盖原因 | `MARKET_DEFECT_UNCOVERED_REASON_OPTIONS` |
-      | 自动化未发现原因 | `MARKET_DEFECT_AUTO_MISS_REASON_OPTIONS` |
+   4. **`Select` 类可编辑列（选中即提交并退出编辑）**：可选项来源以 **业务权威** 为准——**实际归属团队** 取自 **基础数据 · 团队管理**（团队名称）；**主要责任人**、**优化责任人** 取自 **基础数据 · 用户管理**（用户姓名，可按姓名展示）；其余字段为 **业务枚举**（可由接口配置表维护）。下表给出 **Mock / 当前页面数据** 下的 **中文枚举**，实现须与 **`src/mocks/data.ts`**（团队 `mockTeams`、用户 `mockUsers`）及 **`src/constants/marketDefectMockOptions.ts`**（其余常量）保持一致；对接真实基础数据与后端枚举后，下表改为「与线上一致的全量清单」维护方式即可。  
+      | 列表字段（列标题） | 可选项来源 | Mock 阶段中文枚举（与页面 Mock 一致） |
+      | --- | --- | --- |
+      | 是否有效问题 | 业务固定枚举（Mock：`MARKET_DEFECT_YES_NO_OPTIONS`） | **是**、**否** |
+      | 实际归属团队 | **基础数据 · 团队数据**（团队名称）；Mock：`mockTeams`，与常量 `MARKET_DEFECT_ACTUAL_TEAM_OPTIONS` 对齐 | **S17**、**中台**、**FT**、**出租**、**校车**、**公交**、**前装** |
+      | 缺陷类型 | 业务枚举（Mock：`MARKET_DEFECT_TYPE_OPTIONS`） | **功能问题**、**性能问题**、**兼容问题**、**安全问题**、**需求问题**、**重复问题** |
+      | 主要责任归属 | 业务枚举（Mock：`MARKET_DEFECT_MAIN_RESP_ATTRIBUTION_OPTIONS`） | **产品**、**开发**、**测试**、**运维** |
+      | 主要责任人 | **基础数据 · 用户数据**（用户姓名）；Mock：`mockUsers`（`src/mocks/data.ts`） | **张三**、**李四**、**王五**、**赵六**、**钱七**、**孙八**、**周九**、**吴十**、**郑一**、**王二**、**冯三**、**陈四**、**褚五**、**卫六**、**蒋七** |
+      | 流出原因 | 业务枚举（Mock：`MARKET_DEFECT_LEAKAGE_REASON_OPTIONS`） | **需求导入缺失或错误**、**设计实现缺失或错误**、**用例设计缺失或错误**、**验证方案缺失或错误**、**环境配置问题**、**产品使用问题**、**升级部署执行异常** |
+      | 优化责任人 | **基础数据 · 用户数据**（用户姓名）；来源与「主要责任人」相同 | 同「主要责任人」列枚举 |
+      | 自动化是否覆盖 | 业务固定枚举（Mock：`MARKET_DEFECT_YES_NO_OPTIONS`） | **是**、**否** |
+      | 是否可覆盖 | 业务固定枚举（Mock：`MARKET_DEFECT_YES_NO_OPTIONS`） | **是**、**否** |
+      | 不可覆盖原因 | 业务枚举（Mock：`MARKET_DEFECT_UNCOVERED_REASON_OPTIONS`） | **—**、**无**、**现网证书链差异不可在测试环境完全模拟**、**历史版本字段与现网不一致** |
+      | 自动化未发现原因 | 业务枚举（Mock：`MARKET_DEFECT_AUTO_MISS_REASON_OPTIONS`） | **—**、**无**、**脚本未调度夜间压测**、**视觉回归未包含该弹窗状态**、**安全扫描规则未覆盖该接口**、**未覆盖弱网双击提交**、**实车路测样本不足** |
       
-      上述常量定义见 **`src/constants/marketDefectMockOptions.ts`**。若某列未列入表内而以 PRD/字段表为准增补，须在迭代评审中同步更新本表与常量。  
+      若某列未列入表或枚举变更，须在迭代评审中同步更新本表、`marketDefectMockOptions.ts` 及 Mock 数据。  
    5. 成功：`message.success`（Mock 可接受）。
 
 2. **异常场景**
@@ -424,7 +424,7 @@ flowchart TB
 • **验收标准：**
 
 - [ ] 双击编辑行为与控件类型（Input/Select/进度）符合页面 PRD。  
-- [ ] 各 **`Select` 列** 下拉可选项与 **`marketDefectMockOptions`**（或当期已定稿枚举/基础数据）一致，无缺项、错绑。  
+- [ ] 各 **`Select` 列** 下拉与上表一致：**团队类**与 **`mockTeams`**、**责任人**与 **`mockUsers`**（基础数据口径）、其余列与 **`marketDefectMockOptions`** 常量一致，无缺项、错绑。  
 - [ ] 成功/失败反馈明确。
 
 ---
@@ -910,7 +910,7 @@ flowchart TB
 
 | 版本 | 日期 | 变更类型 | 变更内容 | 变更原因 | 影响范围 |
 | ------ | ---------- | ---- | -------- | ---- | ---- |
-| V1.0.1-P5 | 2026-05-13 | 优化 | §1.1.2.4：Select 列枚举表；删除 Esc 取消编辑；完成进度不含 Esc | 可开发性与口径 | §1.1.2.4 |
+| V1.0.1-P5 | 2026-05-13 | 优化 | §1.1.2.4：Select 三列表（中文枚举；团队/用户来自基础数据 Mock） | 开发与验收可读 | §1.1.2.4 |
 | V1.0.1-P5 | 2026-05-13 | 优化 | §1.1.2.3 验收标准：拆分时间过滤与表头筛选勾选项 | 补全表头筛选验收点 | §1.1.2.3 |
 | V1.0.1-P5 | 2026-05-13 | 优化 | 文首+模版：需求描述须保留「异常场景」节，无内容可空；§1.1.2.3 补回空异常场景 | 结构约束 | 范例说明、§1.1.2.3、需求规格说明书-模版 |
 | V1.0.1-P5 | 2026-05-13 | 优化 | §1.1.2.3：删除「季/月非法组合」异常；改为季度-月份联动说明 | 与控件绑定一致 | §1.1.2.3 |
