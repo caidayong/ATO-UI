@@ -17,7 +17,7 @@ export interface User {
 export interface Project {
   id: string;
   name: string;
-  autoType: '接口自动化' | 'UI自动化';
+  autoType: '接口自动化' | 'UI自动化' | '设备自动化';
   team: string;
   projectType: '平台项目' | '整机项目';
   region?: '深圳' | '重庆' | '成都';
@@ -306,6 +306,73 @@ export interface MarketDefect {
   autoMissReason: string;
 }
 
+/** RDMS 缺陷详情 · 历史记录条目（列表点击缺陷 ID 弹层 Mock，对齐 RDMS 详情信息架构） */
+export interface MarketDefectRdmsHistoryEntry {
+  id: string;
+  time: string;
+  author: string;
+  content: string;
+}
+
+/** RDMS 缺陷详情 · 附件（Mock） */
+export interface MarketDefectRdmsAttachment {
+  id: string;
+  name: string;
+  url?: string;
+}
+
+/**
+ * 市场缺陷列表行对应的 RDMS 详情展示模型（字段对齐 RDMS 详情页：产品/客户/缺陷信息 + 右侧元数据 + 历史）
+ */
+export interface MarketDefectRdmsDetail {
+  defectId: string;
+  /** RDMS 内数字编号展示（可与业务 ID 并存） */
+  rdmsNumericId: string;
+  title: string;
+  product: {
+    productLine: string;
+    belongingProduct: string;
+    issueProductVersion: string;
+    productSystemDomain: string;
+  };
+  customer: {
+    region: string;
+    customerCode: string;
+    customerName: string;
+    expectedSolutionAt: string;
+  };
+  defectBlock: {
+    issueLevel: string;
+    frontlineTechSupport: string;
+    description: string;
+  };
+  /** 解决方案（正文可为空占位） */
+  solution: string;
+  /** 缺陷归属（正文可为空占位） */
+  defectAttributionText: string;
+  basic: {
+    status: string;
+    defectType: string;
+    defectAttribution: string;
+    severity: string;
+    occurrenceRate: string;
+    impactScope: string;
+    problemLevel: string;
+    priority: string;
+    ownerTeam: string;
+    isCommonIssue: string;
+  };
+  lifecycle: {
+    createdBy: string;
+    createdAt: string;
+    solutionBrief: string;
+    assignedTo: string;
+    communication: string;
+  };
+  history: MarketDefectRdmsHistoryEntry[];
+  attachments: MarketDefectRdmsAttachment[];
+}
+
 /** 分析报告状态（V1.0.1-P5） */
 export type AnalysisReportTaskStatus = '进行中' | '已完成' | '异常';
 
@@ -372,6 +439,8 @@ export interface ApiCategory {
   description?: string;
   createdAt: string;
   createdBy: string;
+  /** 所属项目 ID（root 全局共享时可缺省；项目级目录必须设置） */
+  projectId?: string;
 }
 
 /** 接口管理：Path / Query 等参数行（预览与编辑共用结构） */
@@ -381,6 +450,11 @@ export interface ApiParamRow {
   /** 是否必须 */
   required: boolean;
   description?: string;
+  /**
+   * 场景调试 Query 行：是否参与请求（默认 true / 未设置视为启用）
+   * Path 参数不使用此字段
+   */
+  enabled?: boolean;
 }
 
 /** 接口管理：接口场景（同一接口下不同参数组合） */
@@ -389,6 +463,10 @@ export interface ApiInterfaceScenario {
   apiId: string;
   name: string;
   description?: string;
+  /** 场景级 Path 参数表（缺省时继承父接口 pathParams） */
+  pathParams?: ApiParamRow[];
+  /** 场景级 Query 参数表（缺省时继承父接口 queryParams） */
+  queryParams?: ApiParamRow[];
 }
 
 /** 接口管理：接口定义 */

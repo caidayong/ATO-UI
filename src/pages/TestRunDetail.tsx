@@ -1,22 +1,25 @@
 /**
  * @page 任务详情
- * @version V1.0.2
+ * @version V1.0.5
  * @base docs/spec/04-页面契约.md § 页面 10（测试运行 / 任务详情）；PRD 章节待同步，以契约为准
  * @changes
  *   - V1.0.0: 初始实现任务详情页；支持任务详情/运行日志/测试报告三 Tab；测试报告中运行记录与汇总模块默认折叠并可展开
  *   - V1.0.1: 测试报告用例列表右上方展示当前选中一级模块的运行耗时（秒）
  *   - V1.0.2: 去掉目录树「全部」节点；选中根目录时展示运行总耗时（秒）
+ *   - V1.0.3: 测试报告「用例详情」抽屉重构——改为左右两栏：左侧步骤列表（通过 ✅ / 失败 ❌ 前缀 + 高亮选中），右侧步骤详情按步骤类型分 Tab（实际请求 / 接口响应 / 变量提取 / 断言），与「调试运行」抽屉复用 src/components/CaseDebugDetail.tsx 一套渲染。
+ *   - V1.0.4: 抽屉宽度收敛至 `min(900px, 60vw)`（80vw 会盖住用例表导致无法切换用例）；左侧步骤栏宽度收紧到 220px，把空间留给右侧详情 Tab。
+ *   - V1.0.5: 抽屉标题在「用例详情：xxx」后补充用例总结果 Tag（通过 ✅ / 失败 ❌）；用例 mock 与「用例管理」对齐——tc-1 改为「创建订单-正常流」并补齐 7 种步骤类型（接口请求 / 自定义接口请求 / 调用函数 / 数据库操作 / if 判断 / for 循环 / 等待），便于需求澄清；mock 数据模型直接采用 `DebugStepResult[]`，移除内部转换层。
+ *   - V1.0.6: 抽取用例详情 mock 至 `src/constants/reportCaseDetailMock.ts`，与「平台自动化任务详情」复用同一份数据。
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Button,
   Card,
-  Collapse,
   Descriptions,
   Drawer,
-  Divider,
   Empty,
+  List,
   Space,
   Tree,
   Table,
@@ -32,12 +35,20 @@ import {
   CaretLeftOutlined,
   CaretRightOutlined,
   CaretUpOutlined,
-  CheckCircleTwoTone,
-  CloseCircleTwoTone,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import { versionDevPath } from '@/constants/routes';
 import type { CaseModule } from '@/types';
 import { mockCaseModules, mockTestCases } from '@/mocks/data';
+import {
+  DebugStepDetailTabs,
+  DebugStepResultHeader,
+} from '@/components/CaseDebugDetail';
+import {
+  REPORT_CASE_DETAIL_BY_ID,
+  type CaseRunDetail,
+} from '@/constants/reportCaseDetailMock';
 
 type RunRecord = {
   id: string;
@@ -54,26 +65,6 @@ type ReportCaseRow = {
   module: string;
   result: '成功' | '失败' | '异常' | '跳过';
   bugId?: string;
-};
-
-type CaseStepDetail = {
-  status: 'pass' | 'fail';
-  title: string;
-  requestUrl: string;
-  startedAt: string;
-  requestHeaders?: string;
-  requestBody?: string;
-  responseHeaders?: string;
-  responseBody?: string;
-  variableExtract?: string;
-  assertions: string[];
-  duration: string;
-};
-
-type CaseRunDetail = {
-  caseName: string;
-  tags: string[];
-  steps: CaseStepDetail[];
 };
 
 const MOCK_RUN_RECORDS: RunRecord[] = [
@@ -186,250 +177,6 @@ const REPORT_SUMMARY_BY_RECORD: Record<string, ReportSummary> = {
   },
 };
 
-const REPORT_CASE_DETAIL_BY_ID: Record<string, CaseRunDetail> = {
-  'tc-1': {
-    caseName: '主机回收hostIP_Standalone',
-    tags: [],
-    steps: [
-      {
-        status: 'pass',
-        title: '第一步：[接口请求]/cicd/userInfo/getCommonToken',
-        requestUrl: 'GET http://129.204.45.218:8099/cicd/userInfo/getCommonToken?userAccount=admin',
-        startedAt: '2026-03-16 18:03:07',
-        requestHeaders: `{
-  "host": "129.204.45.218:8099",
-  "accept": "*/*",
-  "accept-encoding": "gzip, deflate",
-  "connection": "keep-alive",
-  "user-agent": "python-httpx/0.28.1",
-  "_token": "",
-  "content-type": "application/json",
-  "content-length": "2"
-}`,
-        requestBody: `params
-{
-  "userAccount": "admin"
-}`,
-        responseHeaders: `{
-  "traceid": "774871a735b24919ba76afe3175ece6f",
-  "token": "ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SmhkV1FpT2lKQlVGQWlMQ0poY0hCSlpDSTZJakVpTENKcGMzTWlPaUpUWlhKMmFXTmxJaXdpWlhod0lqb3hOemN6TmpZeU5UZzNMQ0pwWVhRaU9qRTNOek0yTlRVek9EY3NJblZ6WlhKSlpDSTZJakVpTENKd1pYSnBiMlJOYVc1MWRHVWlPaUl4TWpBaWZRLmhDc0NPUGdnbUIzNm9vU1drTW1XclZhUmkxdHpGRElDSlMtS3JuWDdXYzQ=",
-  "x-content-type-options": "nosniff",
-  "x-xss-protection": "1; mode=block",
-  "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
-  "pragma": "no-cache",
-  "expires": "0",
-  "x-frame-options": "DENY",
-  "content-type": "application/json",
-  "transfer-encoding": "chunked",
-  "date": "Mon, 16 Mar 2026 10:03:07 GMT",
-  "keep-alive": "timeout=60",
-  "connection": "keep-alive"
-}`,
-        responseBody: `body
-{
-  "data": true,
-  "success": true,
-  "code": 200,
-  "message": null,
-  "developerMessage": null,
-  "langKey": null,
-  "hasTranslate": null,
-  "errorVars": null,
-  "sid": "993282-null-534f33e2-53a9-4a73-baa8-a6df68c0e342"
-}`,
-        variableExtract: 'token, cicd',
-        assertions: [
-          "[ PASS ] 预期结果: None => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '0.069 s',
-      },
-      {
-        status: 'pass',
-        title: '第二步：[接口请求]/cicd/host/add',
-        requestUrl: 'POST http://129.204.45.218:8099/cicd/host/add',
-        startedAt: '2026-03-16 18:03:07',
-        requestHeaders: '',
-        requestBody: '',
-        responseHeaders: '',
-        responseBody: '',
-        assertions: [
-          "[ PASS ] 预期结果: None => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '0.059 s',
-      },
-      {
-        status: 'pass',
-        title: '第三步：[接口请求]/cicd/host/pageInfo',
-        requestUrl:
-          'GET http://129.204.45.218:8099/cicd/host/pageInfo?search=192.168.146.40&page=1&pageSize=20&teamId=1013&hostGroupId=207',
-        startedAt: '2026-03-16 18:03:07',
-        requestHeaders: '',
-        requestBody: '',
-        responseHeaders: '',
-        responseBody: '',
-        variableExtract: '',
-        assertions: [
-          "[ PASS ] 预期结果: None => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-          "[ PASS ] 预期结果: data.total => equal_to => 1 <class 'int'> 实际结果: 1 <class 'int'>",
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '0.062 s',
-      },
-      {
-        status: 'pass',
-        title: '第四步：[接口请求]/cicd/host/hostClean',
-        requestUrl: 'POST http://129.204.45.218:8099/cicd/host/hostClean',
-        startedAt: '2026-03-16 18:03:07',
-        requestHeaders: '',
-        requestBody: '',
-        responseHeaders: '',
-        responseBody: '',
-        assertions: [
-          "[ PASS ] 预期结果: None => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '17.035 s',
-      },
-    ],
-  },
-  'tc-2': {
-    caseName: '创建订单-库存不足',
-    tags: ['异常'],
-    steps: [
-      {
-        status: 'pass',
-        title: '第一步：[接口请求]/api/orders',
-        requestUrl: 'POST http://129.204.45.218:8099/api/orders',
-        startedAt: '2026-03-16 18:05:11',
-        requestHeaders: '{"content-type":"application/json"}',
-        requestBody: '{ "sku": "SKU-001", "count": 9999 }',
-        responseHeaders: '{"content-type":"application/json"}',
-        responseBody: '{ "code": 400, "message": "库存不足" }',
-        assertions: [
-          "[ PASS ] 预期结果: code => equal_to => 400 <class 'int'> 实际结果: 400 <class 'int'>",
-        ],
-        duration: '0.121 s',
-      },
-      {
-        status: 'fail',
-        title: '第二步：[断言] 订单创建应成功',
-        requestUrl: '-',
-        startedAt: '2026-03-16 18:05:11',
-        assertions: [
-          "[ FAIL ] 预期结果: success => equal_to => true <class 'bool'> 实际结果: false <class 'bool'>",
-        ],
-        duration: '0.001 s',
-      },
-    ],
-  },
-  'tc-5': {
-    caseName: '优惠券核销-正常流',
-    tags: ['coupon', 'P1'],
-    steps: [
-      {
-        status: 'pass',
-        title: '第一步：[接口请求]/coupon/verify',
-        requestUrl: 'POST http://129.204.45.218:8099/coupon/verify',
-        startedAt: '2026-03-16 18:06:02',
-        requestBody: '{ "couponCode": "CPN-123" }',
-        assertions: [
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '0.054 s',
-      },
-      {
-        status: 'pass',
-        title: '第二步：[接口请求]/coupon/redeem',
-        requestUrl: 'POST http://129.204.45.218:8099/coupon/redeem',
-        startedAt: '2026-03-16 18:06:03',
-        requestBody: '{ "couponCode": "CPN-123", "orderId": "OD-888" }',
-        assertions: [
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '0.088 s',
-      },
-    ],
-  },
-  'tc-6': {
-    caseName: '风控拦截-高风险用户',
-    tags: ['risk'],
-    steps: [
-      {
-        status: 'pass',
-        title: '第一步：[接口请求]/risk/score',
-        requestUrl: 'GET http://129.204.45.218:8099/risk/score?userId=U-1001',
-        startedAt: '2026-03-16 18:07:20',
-        assertions: [
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-          "[ PASS ] 预期结果: data.score => greater_than => 80 <class 'int'> 实际结果: 92 <class 'int'>",
-        ],
-        duration: '0.041 s',
-      },
-      {
-        status: 'pass',
-        title: '第二步：[接口请求]/orders/create',
-        requestUrl: 'POST http://129.204.45.218:8099/orders/create',
-        startedAt: '2026-03-16 18:07:21',
-        responseBody: '{ "code": 403, "message": "风控拦截" }',
-        assertions: [
-          "[ PASS ] 预期结果: code => equal_to => 403 <class 'int'> 实际结果: 403 <class 'int'>",
-        ],
-        duration: '0.067 s',
-      },
-    ],
-  },
-  'tc-7': {
-    caseName: '日终对账-差异检测',
-    tags: ['recon'],
-    steps: [
-      {
-        status: 'pass',
-        title: '第一步：[接口请求]/recon/start',
-        requestUrl: 'POST http://129.204.45.218:8099/recon/start',
-        startedAt: '2026-03-16 18:08:10',
-        assertions: [
-          "[ PASS ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 200 <class 'int'>",
-        ],
-        duration: '0.093 s',
-      },
-      {
-        status: 'fail',
-        title: '第二步：[接口请求]/recon/result',
-        requestUrl: 'GET http://129.204.45.218:8099/recon/result?batchId=RB-1',
-        startedAt: '2026-03-16 18:08:22',
-        responseBody: '{ "code": 500, "message": "对账服务异常" }',
-        assertions: [
-          "[ FAIL ] 预期结果: code => equal_to => 200 <class 'int'> 实际结果: 500 <class 'int'>",
-        ],
-        duration: '0.120 s',
-      },
-    ],
-  },
-};
-
-function renderMonoBlock(text: string) {
-  return (
-    <pre
-      style={{
-        margin: 0,
-        padding: 10,
-        background: '#fafafa',
-        border: '1px solid #f0f0f0',
-        borderRadius: 6,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-        fontFamily: 'Consolas, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
-        fontSize: 12,
-        lineHeight: 1.6,
-      }}
-    >
-      {text}
-    </pre>
-  );
-}
-
 type ReportStatusFilter = 'all' | 'success' | 'failed' | 'abnormal' | 'skipped';
 
 type StatusCounts = {
@@ -524,6 +271,13 @@ export function TestRunDetail() {
   const [reportStatusFilter, setReportStatusFilter] = useState<ReportStatusFilter>('all');
   const [selectedReportCaseId, setSelectedReportCaseId] = useState<string>('');
   const [caseDrawerOpen, setCaseDrawerOpen] = useState(false);
+  /** 用例详情抽屉中：当前激活的步骤序号（与左侧步骤列表联动） */
+  const [drawerActiveStepIdx, setDrawerActiveStepIdx] = useState(0);
+
+  useEffect(() => {
+    // 切换到新用例或重新打开抽屉时回到第一个步骤
+    setDrawerActiveStepIdx(0);
+  }, [selectedReportCaseId, caseDrawerOpen]);
 
   const versionModules = useMemo(
     () => mockCaseModules.filter((m) => m.versionId === versionId).slice().sort((a, b) => a.sort - b.sort),
@@ -1113,6 +867,7 @@ export function TestRunDetail() {
     return {
       caseName: row.name,
       tags: row.tags,
+      caseResult: row.result === '成功' ? 'pass' : 'fail',
       steps: [],
     } as CaseRunDetail;
   }, [reportFilteredRows, selectedReportCaseId]);
@@ -1140,108 +895,147 @@ export function TestRunDetail() {
         ]}
       />
       <Drawer
-        title={drawerDetail ? `用例详情：${drawerDetail.caseName}` : '用例详情'}
+        title={
+          drawerDetail ? (
+            <Space size={8} wrap>
+              <Typography.Text strong style={{ fontSize: 14 }}>
+                用例详情：{drawerDetail.caseName}
+              </Typography.Text>
+              <Tag
+                color={drawerDetail.caseResult === 'pass' ? 'success' : 'error'}
+                icon={
+                  drawerDetail.caseResult === 'pass' ? (
+                    <CheckCircleOutlined />
+                  ) : (
+                    <CloseCircleOutlined />
+                  )
+                }
+                style={{ marginInlineEnd: 0 }}
+              >
+                {drawerDetail.caseResult === 'pass' ? '通过' : '失败'}
+              </Tag>
+              {drawerDetail.tags.length ? (
+                <Space size={4} wrap>
+                  {drawerDetail.tags.map((t) => (
+                    <Tag key={t} style={{ marginInlineEnd: 0 }}>
+                      {t}
+                    </Tag>
+                  ))}
+                </Space>
+              ) : null}
+            </Space>
+          ) : (
+            '用例详情'
+          )
+        }
         placement="right"
-        width="40vw"
+        width="min(900px, 60vw)"
         open={caseDrawerOpen}
         onClose={() => setCaseDrawerOpen(false)}
         mask={false}
         zIndex={1200}
+        styles={{
+          body: { padding: 0, height: '100%', overflow: 'hidden' },
+        }}
       >
-        {drawerDetail ? (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Tag color="success" style={{ margin: 0 }}>
-                成功
-              </Tag>
-              <Typography.Text strong style={{ fontSize: 16 }}>
-                {drawerDetail.caseName}
-              </Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">标签：</Typography.Text>
-              <Typography.Text>{drawerDetail.tags.join(', ') || '-'}</Typography.Text>
-            </div>
-            <Divider style={{ margin: '4px 0' }} />
-            <Typography.Text strong>用例执行步骤</Typography.Text>
-            {drawerDetail.steps.length ? (
-              drawerDetail.steps.map((step) => (
+        {drawerDetail && drawerDetail.steps.length ? (
+          (() => {
+            const safeIdx = Math.min(
+              Math.max(drawerActiveStepIdx, 0),
+              drawerDetail.steps.length - 1
+            );
+            const activeResult = drawerDetail.steps[safeIdx];
+            return (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '220px 1fr',
+                  gap: 0,
+                  height: '100%',
+                  minHeight: 0,
+                }}
+              >
                 <Card
-                  key={step.title}
                   size="small"
-                  title={
-                    <Space size={8}>
-                      {step.status === 'pass' ? (
-                        <CheckCircleTwoTone twoToneColor="#52c41a" />
-                      ) : (
-                        <CloseCircleTwoTone twoToneColor="#ff4d4f" />
-                      )}
-                      <span>{step.title}</span>
-                    </Space>
-                  }
-                  styles={{ body: { padding: 12 } }}
+                  title="步骤"
+                  style={{
+                    height: '100%',
+                    borderRight: '1px solid #f0f0f0',
+                    borderRadius: 0,
+                  }}
+                  styles={{ body: { padding: 8, height: '100%', overflow: 'auto' } }}
                 >
-                  <Descriptions size="small" column={1} labelStyle={{ width: 100 }}>
-                    <Descriptions.Item label="请求地址">
-                      <Typography.Text style={{ wordBreak: 'break-word' }}>{step.requestUrl}</Typography.Text>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="开始时间">{step.startedAt}</Descriptions.Item>
-                    <Descriptions.Item label="耗时">{step.duration}</Descriptions.Item>
-                  </Descriptions>
-
-                  <Collapse
+                  <List
                     size="small"
-                    style={{ marginTop: 8 }}
-                    defaultActiveKey={['assertions']}
-                    items={[
-                      {
-                        key: 'requestHeaders',
-                        label: '请求头',
-                        children: step.requestHeaders ? renderMonoBlock(step.requestHeaders) : <Empty description="无" />,
-                      },
-                      {
-                        key: 'requestBody',
-                        label: '请求体',
-                        children: step.requestBody ? renderMonoBlock(step.requestBody) : <Empty description="无" />,
-                      },
-                      {
-                        key: 'responseHeaders',
-                        label: '响应头',
-                        children: step.responseHeaders ? renderMonoBlock(step.responseHeaders) : <Empty description="无" />,
-                      },
-                      {
-                        key: 'responseBody',
-                        label: '响应体',
-                        children: step.responseBody ? renderMonoBlock(step.responseBody) : <Empty description="无" />,
-                      },
-                      {
-                        key: 'variableExtract',
-                        label: '变量提取',
-                        children: step.variableExtract ? renderMonoBlock(step.variableExtract) : <Empty description="无" />,
-                      },
-                      {
-                        key: 'assertions',
-                        label: '断言',
-                        children: (
-                          <div>
-                            {step.assertions.map((line) => (
-                              <Typography.Paragraph key={line} style={{ margin: '2px 0 0 0' }}>
-                                {line}
-                              </Typography.Paragraph>
-                            ))}
+                    dataSource={drawerDetail.steps}
+                    renderItem={(item, idx) => {
+                      const active = idx === safeIdx;
+                      const ok = item.ok;
+                      return (
+                        <List.Item
+                          onClick={() => setDrawerActiveStepIdx(idx)}
+                          style={{
+                            cursor: 'pointer',
+                            background: active ? '#bae0ff' : undefined,
+                            borderLeft: active
+                              ? '3px solid #1677ff'
+                              : '3px solid transparent',
+                            padding: '6px 8px',
+                            borderRadius: 4,
+                            transition: 'background 0.15s ease, border-color 0.15s ease',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              width: '100%',
+                              minWidth: 0,
+                            }}
+                          >
+                            {ok ? (
+                              <CheckCircleOutlined
+                                style={{ color: '#52c41a', fontSize: 14, flex: '0 0 auto' }}
+                              />
+                            ) : (
+                              <CloseCircleOutlined
+                                style={{ color: '#ff4d4f', fontSize: 14, flex: '0 0 auto' }}
+                              />
+                            )}
+                            <Typography.Text style={{ flex: '0 0 auto' }}>
+                              {item.order}.
+                            </Typography.Text>
+                            <Typography.Text
+                              ellipsis={{ tooltip: item.title }}
+                              style={{ flex: 1, minWidth: 0 }}
+                            >
+                              {item.title}
+                            </Typography.Text>
                           </div>
-                        ),
-                      },
-                    ]}
+                        </List.Item>
+                      );
+                    }}
                   />
                 </Card>
-              ))
-            ) : (
-              <Empty description="暂无步骤详情（Mock）" />
-            )}
-          </Space>
+                <Card
+                  size="small"
+                  title={<DebugStepResultHeader result={activeResult} />}
+                  style={{ height: '100%', borderRadius: 0 }}
+                  styles={{
+                    body: { height: '100%', overflow: 'auto', padding: 16 },
+                    header: { padding: '8px 16px' },
+                  }}
+                >
+                  <DebugStepDetailTabs result={activeResult} />
+                </Card>
+              </div>
+            );
+          })()
         ) : (
-          <Empty description="暂无详情" />
+          <div style={{ padding: 24 }}>
+            <Empty description={drawerDetail ? '暂无步骤详情（Mock）' : '暂无详情'} />
+          </div>
         )}
       </Drawer>
     </Card>

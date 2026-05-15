@@ -1,10 +1,13 @@
 /**
  * @page 项目管理
- * @version V1.0.0
+ * @version V1.0.3
  * @base ATO_V1.0.0-页面需求与交互规格.md 第 4.2 节
  * @changes
  *   - V1.0.0: 初始实现
  *   - UI 验收：无页面大标题；卡片仅自动化类型 Tag；项目状态（正常/绿）；右上角「…」悬停菜单；删除 Modal.confirm
+ *   - V1.0.1: 自动化类型新增「设备自动化」（Tag 配色 cyan）；mock 项目名称对齐真实业务（S17-3.0/业务中台/FT-3.0/出租/校车/海外货运）
+ *   - V1.0.2: 卡片头部补充「项目类型」Tag（平台项目=geekblue / 整机项目=gold），与自动化类型并排展示
+ *   - V1.0.3: 卡片头部两枚 Tag 改为左右对齐布局（自动化类型左、项目类型右）
  */
 
 import { useState, useMemo } from 'react';
@@ -121,7 +124,17 @@ export function ProjectList() {
 
   // 获取自动化类型标签颜色
   const getAutoTypeColor = (type: string) => {
-    return type === '接口自动化' ? 'blue' : 'purple';
+    if (type === '接口自动化') return 'blue';
+    if (type === 'UI自动化') return 'purple';
+    if (type === '设备自动化') return 'cyan';
+    return 'default';
+  };
+
+  // 获取项目类型标签颜色（与自动化类型色系区分）
+  const getProjectTypeColor = (type: string) => {
+    if (type === '平台项目') return 'geekblue';
+    if (type === '整机项目') return 'gold';
+    return 'default';
   };
 
   return (
@@ -225,11 +238,24 @@ export function ProjectList() {
                     <Title level={5} style={{ margin: 0, marginBottom: 12 }}>
                       {project.name}
                     </Title>
-                    <Space size={[0, 8]} wrap>
-                      <Tag color={getAutoTypeColor(project.autoType)}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <Tag color={getAutoTypeColor(project.autoType)} style={{ marginInlineEnd: 0 }}>
                         {project.autoType}
                       </Tag>
-                    </Space>
+                      <Tag
+                        color={getProjectTypeColor(project.projectType)}
+                        style={{ marginInlineEnd: 0 }}
+                      >
+                        {project.projectType}
+                      </Tag>
+                    </div>
                   </div>
 
                   <div style={{ color: '#666', fontSize: 14 }}>
@@ -281,6 +307,7 @@ export function ProjectList() {
             <Select placeholder="请选择">
               <Option value="接口自动化">接口自动化</Option>
               <Option value="UI自动化">UI自动化</Option>
+              <Option value="设备自动化">设备自动化</Option>
             </Select>
           </Form.Item>
 
@@ -307,7 +334,7 @@ export function ProjectList() {
             ]}
             extra="同团队内项目名称需唯一"
           >
-            <Input placeholder="示例：ATO-支付回归" />
+            <Input placeholder="示例：S17-3.0" />
           </Form.Item>
 
           <Form.Item

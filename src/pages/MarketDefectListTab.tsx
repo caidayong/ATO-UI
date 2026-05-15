@@ -5,7 +5,7 @@
  * @changes
  *   - V1.0.1-P5: 操作列刷新图标居中，悬停提示「刷新」
  *   - V1.0.1-P5: 新增「缺陷归属团队」列（产品线后，只读，支持筛选）
- *   - V1.0.1-P5: 筛选/搜索/Mock 表/RDMS Mock 弹层；跳转报表写 sessionStorage
+ *   - V1.0.1-P5: 筛选/搜索/Mock 表；RDMS 详情弹层（产品/客户/缺陷信息与右侧元数据+历史，Mock）；跳转报表写 sessionStorage
  *   - V1.0.1-P5 验收: 工具栏含「刷新→导出→报表」等；列设置入口移至表头「操作」后
  *   - V1.0.1-P5 验收: 列表列与冻结列（左三列 + 操作列固定，横向滚动）
  *   - V1.0.1-P5: Mock 枚举（缺陷来源/类型/团队/产品线/责任归属/流出原因）与筛选下拉对齐
@@ -48,6 +48,8 @@ import {
 } from '@ant-design/icons';
 import type { MarketDefect, MarketDefectListSnapshot } from '@/types';
 import { mockMarketDefects } from '@/mocks/data';
+import { MarketDefectRdmsDetailModal } from '@/components/MarketDefectRdmsDetailModal';
+import { buildMarketDefectRdmsDetailFromRow } from '@/utils/marketDefectRdmsDetail';
 import { ROUTES } from '@/constants/routes';
 import {
   MARKET_DEFECT_ACTUAL_TEAM_OPTIONS,
@@ -328,7 +330,11 @@ export function MarketDefectListTab() {
   const [exportOpen, setExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rdmsOpen, setRdmsOpen] = useState(false);
-  const [rdmsId, setRdmsId] = useState('');
+  const [rdmsRecord, setRdmsRecord] = useState<MarketDefect | null>(null);
+  const rdmsDetail = useMemo(
+    () => (rdmsRecord ? buildMarketDefectRdmsDetailFromRow(rdmsRecord) : null),
+    [rdmsRecord],
+  );
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const hasRowSelection = selectedRowKeys.length > 0;
 
@@ -454,14 +460,14 @@ export function MarketDefectListTab() {
         fixed: 'left',
         onHeaderCell: () => marketDefectThProps(BG_READONLY_HEADER),
         onCell: () => ({ style: { background: BG_READONLY_CELL } }),
-        render: (id: string) => (
+        render: (_id: string, record) => (
           <Typography.Link
             onClick={() => {
-              setRdmsId(id);
+              setRdmsRecord(record);
               setRdmsOpen(true);
             }}
           >
-            {id}
+            {record.id}
           </Typography.Link>
         ),
       },
@@ -1010,13 +1016,14 @@ export function MarketDefectListTab() {
         <Typography.Paragraph type="secondary">首版占位：后续按 REQ-025 配置可隐藏列。</Typography.Paragraph>
       </Drawer>
 
-      <Modal title={`RDMS 详情 · ${rdmsId}`} open={rdmsOpen} onCancel={() => setRdmsOpen(false)} footer={null} width={640}>
-        <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 16, background: '#fafafa' }}>
-          <Typography.Title level={5}>Mock 结构（首版无 iframe）</Typography.Title>
-          <p>缺陷编号：{rdmsId}</p>
-          <p>状态、描述、附件等占位区块，对齐 REQ-028 信息架构。</p>
-        </div>
-      </Modal>
+      <MarketDefectRdmsDetailModal
+        open={rdmsOpen}
+        detail={rdmsDetail}
+        onClose={() => {
+          setRdmsOpen(false);
+          setRdmsRecord(null);
+        }}
+      />
     </Card>
   );
 }

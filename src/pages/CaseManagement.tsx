@@ -1,6 +1,6 @@
 /**
  * @page 用例管理
- * @version V1.0.24
+ * @version V1.0.30
  * @base docs/spec/04-页面契约.md § 页面 5（用例管理）；ATO_V1.0.0-页面需求与交互规格.md 第 4.5 节（用例管理）
  * @changes
  *   - V1.0.0: 新窗口内 3:7 分栏；目录树（右键菜单占位）；用例列表；用例详情多 Tab；步骤简版编辑器（Mock 状态）
@@ -28,6 +28,12 @@
  *   - V1.0.22: 目录/子目录右侧「标签/分组」Tab 增加分组（单选可清空）与标签（多选可移除）下拉配置（Mock 按目录本地保存，选项与全局分组及本版本用例标签对齐）
  *   - V1.0.23: 用例列表工具栏增加「复制到」：勾选后可点，弹窗选择目标目录批量复制；与目标目录标题重复时二次确认「目标目录用例已存在，请确认」后自动加副本后缀
  *   - V1.0.24: 用例详情「调试」Mock：运行中顶栏提示+按钮 loading；结束后底部展开「调试结果」折叠面板（用例执行步骤 / 测试步骤与验收 Mock 日志一致）
+ *   - V1.0.25: 调试结果改为右侧抽屉式（不遮挡步骤栏，顶部与步骤齐平），按步骤类型分 Tab 展示「实际请求 / 变量提取 / 接口响应或函数返回或查询结果 / 断言」；步骤栏序号前展示通过 ✅ / 失败 ❌；点击步骤同步切换抽屉详情；移除原底部「调试结果」折叠面板。
+ *   - V1.0.26: 调试结果抽屉宽度调整为「100% - 256px」覆盖整个步骤详情区；标题栏「×」关闭改为左向「»」收起按钮，收起后在区域右沿展示「«」展开把手；步骤栏点击不再自动展开抽屉（仅同步内容）；选中步骤底色加深至 #bae0ff 并增加左侧 3px 蓝色指示条。
+ *   - V1.0.27: 调试结果抽屉 Tab 顺序统一为「实际请求 → 结果(接口响应/函数返回/查询结果) → 变量提取 → 断言」（变量提取固定为倒数第二）；调用函数步骤「实际请求」合并「函数名 + 入参」为单行「函数调用」表达式（如 uuid(len=10)）。
+ *   - V1.0.28: 调用函数步骤 Mock 数据补齐——按步骤标题关键字（幂等/订单号/签名/手机/时间戳/金额）命中预置样本（如 uuid(len=32)、md5(text=...)、random_phone(prefix="138")），未命中按索引轮换 uuid/generate_order_no/now_ms 兜底；返回值、变量提取、断言同步联动 mock。
+ *   - V1.0.29: 抽屉中的步骤详情渲染抽取到 src/components/CaseDebugDetail.tsx（DebugStepResultHeader / DebugStepDetailTabs / DebugSection / Extracted / Assertions），供「测试报告」用例详情抽屉复用；本页 UI 行为保持一致。
+ *   - V1.0.30: 接口请求步骤 URL 行移除 IP+端口输入（与顶部运行环境一致）；详情顶栏环境选择前增加「运行环境」文案。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -38,7 +44,7 @@ import {
   Button,
   Card,
   Checkbox,
-  Collapse,
+  Drawer,
   Dropdown,
   Empty,
   Form,
@@ -71,6 +77,8 @@ import {
   CloseCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
+  DoubleLeftOutlined,
+  DoubleRightOutlined,
   EditOutlined,
   ExportOutlined,
   FileTextOutlined,
@@ -97,7 +105,14 @@ import {
 import type { CaseModule, CaseResult, CaseStep, CaseStepType, TestCase } from '@/types';
 import { CASE_STEP_TYPES } from '@/types';
 import { DynamicValueInput } from '@/components/DynamicValueInput';
-import { CASE_DEBUG_MOCK_STEPS } from '@/constants/caseDebugMockLog';
+import {
+  buildCaseDebugResults,
+  type DebugStepResult,
+} from '@/constants/caseDebugMockLog';
+import {
+  DebugStepDetailTabs,
+  DebugStepResultHeader,
+} from '@/components/CaseDebugDetail';
 import { stringify as stringifyYaml } from 'yaml';
 
 const { Text } = Typography;
@@ -351,170 +366,59 @@ function buildModuleOnlyTreeData(modules: CaseModule[], versionId: string): Modu
   return build(null);
 }
 
-function CaseDebugResultLogPanel() {
+/** 调试运行结果右侧抽屉：按步骤类型分 Tab 展示运行详情 */
+function CaseDebugStepDrawer({
+  open,
+  onClose,
+  result,
+}: {
+  open: boolean;
+  onClose: () => void;
+  result: DebugStepResult | null;
+}) {
+  const renderTitle = () => (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        minWidth: 0,
+        width: '100%',
+      }}
+    >
+      <Tooltip title="收起">
+        <Button
+          type="text"
+          size="small"
+          icon={<DoubleRightOutlined />}
+          onClick={onClose}
+          aria-label="收起调试结果抽屉"
+        />
+      </Tooltip>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <DebugStepResultHeader result={result} />
+      </div>
+    </div>
+  );
+
   return (
-    <Collapse
-      bordered
-      size="small"
-      defaultActiveKey={['debug-result', 'exec-line', 'test-steps']}
-      style={{ width: '100%' }}
-      items={[
-        {
-          key: 'debug-result',
-          label: '调试结果',
-          children: (
-            <Collapse
-              bordered={false}
-              ghost
-              size="small"
-              defaultActiveKey={['exec-line', 'test-steps']}
-              items={[
-                {
-                  key: 'exec-line',
-                  label: '| 用例执行步骤',
-                  children: (
-                    <Collapse
-                      bordered={false}
-                      ghost
-                      size="small"
-                      defaultActiveKey={['test-steps']}
-                      items={[
-                        {
-                          key: 'test-steps',
-                          label: '测试步骤',
-                          children: (
-                            <div style={{ paddingTop: 4 }}>
-                              {CASE_DEBUG_MOCK_STEPS.map((s, idx) => (
-                                <div
-                                  key={idx}
-                                  style={{
-                                    marginBottom: 18,
-                                    paddingBottom: 14,
-                                    borderBottom:
-                                      idx < CASE_DEBUG_MOCK_STEPS.length - 1 ? '1px solid #f0f0f0' : undefined,
-                                  }}
-                                >
-                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                    {s.ok ? (
-                                      <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 3, flexShrink: 0 }} />
-                                    ) : (
-                                      <CloseCircleOutlined style={{ color: '#ff4d4f', marginTop: 3, flexShrink: 0 }} />
-                                    )}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <Text strong style={{ display: 'block', fontSize: 13 }}>
-                                        {s.headline}
-                                      </Text>
-                                      <div style={{ marginTop: 8, fontSize: 12 }}>
-                                        <div>
-                                          <Text>请求地址：</Text>
-                                        </div>
-                                        <div
-                                          style={{
-                                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                                            wordBreak: 'break-all',
-                                            marginTop: 2,
-                                          }}
-                                        >
-                                          {s.methodAndUrl}
-                                        </div>
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>请求开始时间：</Text>
-                                        </div>
-                                        <div style={{ marginTop: 2 }}>{s.startTime}</div>
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>请求头：</Text>
-                                        </div>
-                                        {s.requestHeaders ? (
-                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                                            {s.requestHeaders}
-                                          </pre>
-                                        ) : null}
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>请求体：</Text>
-                                        </div>
-                                        {s.requestBody ? (
-                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                                            {s.requestBody}
-                                          </pre>
-                                        ) : null}
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>响应头：</Text>
-                                        </div>
-                                        {s.responseHeaders ? (
-                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                                            {s.responseHeaders}
-                                          </pre>
-                                        ) : null}
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>响应体：</Text>
-                                        </div>
-                                        {s.responseBody ? (
-                                          <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                                            {s.responseBody}
-                                          </pre>
-                                        ) : null}
-                                        {s.variableExtract ? (
-                                          <>
-                                            <div style={{ marginTop: 8 }}>
-                                              <Text>变量提取：</Text>
-                                            </div>
-                                            <div
-                                              style={{
-                                                marginTop: 2,
-                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                                                wordBreak: 'break-all',
-                                                fontSize: 12,
-                                              }}
-                                            >
-                                              {s.variableExtract}
-                                            </div>
-                                          </>
-                                        ) : null}
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>断言：</Text>
-                                        </div>
-                                        <div style={{ marginTop: 4 }}>
-                                          {s.assertions.map((line, i) => (
-                                            <div
-                                              key={i}
-                                              style={{
-                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                                                fontSize: 12,
-                                                wordBreak: 'break-all',
-                                                color: line.includes('[ FAIL ]')
-                                                  ? '#cf1322'
-                                                  : line.includes('[ PASS ]')
-                                                    ? '#237804'
-                                                    : undefined,
-                                                marginBottom: line === '且' ? 2 : 4,
-                                              }}
-                                            >
-                                              {line}
-                                            </div>
-                                          ))}
-                                        </div>
-                                        <div style={{ marginTop: 8 }}>
-                                          <Text>请求耗时：</Text>
-                                        </div>
-                                        <div style={{ marginTop: 2 }}>{s.durationSec}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ),
-                        },
-                      ]}
-                    />
-                  ),
-                },
-              ]}
-            />
-          ),
-        },
-      ]}
-    />
+    <Drawer
+      title={renderTitle()}
+      placement="right"
+      width="calc(100% - 256px)"
+      mask={false}
+      open={open}
+      onClose={onClose}
+      closable={false}
+      getContainer={false}
+      rootStyle={{ position: 'absolute', inset: 0 }}
+      styles={{
+        body: { padding: 16 },
+        header: { padding: '8px 12px' },
+      }}
+    >
+      <DebugStepDetailTabs result={result} />
+    </Drawer>
   );
 }
 
@@ -539,7 +443,6 @@ export function CaseManagement() {
   const [stepTypeById, setStepTypeById] = useState<Record<string, StepType>>({});
   const [requestMethodByStepId, setRequestMethodByStepId] = useState<Record<string, string>>({});
   const [requestProtocolByStepId, setRequestProtocolByStepId] = useState<Record<string, string>>({});
-  const [requestHostByStepId, setRequestHostByStepId] = useState<Record<string, string>>({});
   const [requestUrlByStepId, setRequestUrlByStepId] = useState<Record<string, string>>({});
   const [requestPathParamsByStepId, setRequestPathParamsByStepId] = useState<Record<string, RequestParamRow[]>>({});
   const [requestQueryParamsByStepId, setRequestQueryParamsByStepId] = useState<Record<string, RequestParamRow[]>>({});
@@ -610,18 +513,42 @@ export function CaseManagement() {
   const [caseDebugPhaseByCaseId, setCaseDebugPhaseByCaseId] = useState<
     Record<string, 'idle' | 'running' | 'done'>
   >({});
+  /** 调试运行结果：caseId -> stepId -> 单步运行详情 */
+  const [caseDebugResultsByCaseId, setCaseDebugResultsByCaseId] = useState<
+    Record<string, Record<string, DebugStepResult>>
+  >({});
+  /** 调试运行抽屉是否打开（按用例隔离） */
+  const [debugDrawerOpenByCaseId, setDebugDrawerOpenByCaseId] = useState<Record<string, boolean>>({});
   const caseDebugTimerRef = useRef<Record<string, number>>({});
 
-  const triggerCaseDebug = useCallback((cid: string) => {
-    const prevT = caseDebugTimerRef.current[cid];
-    if (prevT) window.clearTimeout(prevT);
-    setCaseDebugPhaseByCaseId((p) => ({ ...p, [cid]: 'running' }));
-    caseDebugTimerRef.current[cid] = window.setTimeout(() => {
-      setCaseDebugPhaseByCaseId((p) => ({ ...p, [cid]: 'done' }));
-      delete caseDebugTimerRef.current[cid];
-      message.success('调试完成（Mock）');
-    }, 1600);
-  }, []);
+  /**
+   * 触发调试：1.6s 后以传入的 `resultsByStepId` 作为本次运行结果，
+   * 自动激活第一步并打开右侧抽屉。
+   */
+  const triggerCaseDebug = useCallback(
+    (
+      cid: string,
+      buildResultsByStepId: () => Record<string, DebugStepResult>,
+      firstStepId: string | undefined
+    ) => {
+      const prevT = caseDebugTimerRef.current[cid];
+      if (prevT) window.clearTimeout(prevT);
+      setCaseDebugPhaseByCaseId((p) => ({ ...p, [cid]: 'running' }));
+      setDebugDrawerOpenByCaseId((p) => ({ ...p, [cid]: false }));
+      caseDebugTimerRef.current[cid] = window.setTimeout(() => {
+        const map = buildResultsByStepId();
+        setCaseDebugResultsByCaseId((prev) => ({ ...prev, [cid]: map }));
+        setCaseDebugPhaseByCaseId((p) => ({ ...p, [cid]: 'done' }));
+        if (firstStepId) {
+          setActiveStepByCase((prev) => ({ ...prev, [cid]: firstStepId }));
+        }
+        setDebugDrawerOpenByCaseId((p) => ({ ...p, [cid]: true }));
+        delete caseDebugTimerRef.current[cid];
+        message.success('调试完成（Mock）');
+      }, 1600);
+    },
+    []
+  );
 
   const [moduleEnabledMap, setModuleEnabledMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(mockCaseModules.map((m) => [m.id, true]))
@@ -2455,23 +2382,12 @@ export function CaseManagement() {
           <Text strong style={{ flex: 1, minWidth: 160 }}>
             {tc.name}
           </Text>
+          <Text type="secondary">运行环境</Text>
           <Select
             value={selectedEnvByCase[caseId] ?? 'SIT'}
             onChange={(v) => {
               const nextEnv = String(v);
-              const prevEnv = selectedEnvByCase[caseId] ?? 'SIT';
-              const prevDefaultHost = ENV_DEFAULT_HOST[prevEnv] ?? ENV_DEFAULT_HOST.SIT;
-              const nextDefaultHost = ENV_DEFAULT_HOST[nextEnv] ?? ENV_DEFAULT_HOST.SIT;
               setSelectedEnvByCase((prev) => ({ ...prev, [caseId]: nextEnv }));
-              setRequestHostByStepId((prev) => {
-                const next = { ...prev };
-                list.forEach((s) => {
-                  const host = next[s.id];
-                  // 仅覆盖默认值或尚未填写，避免覆盖用户手工改过的地址
-                  if (!host || host === prevDefaultHost) next[s.id] = nextDefaultHost;
-                });
-                return next;
-              });
               setRequestProtocolByStepId((prev) => {
                 const next = { ...prev };
                 list.forEach((s) => {
@@ -2498,7 +2414,45 @@ export function CaseManagement() {
           >
             保存
           </Button>
-          <Button loading={debugPhase === 'running'} onClick={() => triggerCaseDebug(caseId)}>
+          <Button
+            loading={debugPhase === 'running'}
+            onClick={() => {
+              const firstStepId = list[0]?.id;
+              const caseEnvHost =
+                ENV_DEFAULT_HOST[selectedEnvByCase[caseId] ?? 'SIT'] ?? ENV_DEFAULT_HOST.SIT;
+              triggerCaseDebug(
+                caseId,
+                () => {
+                  const buildResults = buildCaseDebugResults({
+                    steps: list,
+                    stepTypeById,
+                    requestMethodByStepId,
+                    requestProtocolByStepId,
+                    requestHostByStepId: Object.fromEntries(
+                      list.map((s) => [s.id, caseEnvHost])
+                    ),
+                    requestUrlByStepId,
+                    requestBodyJsonByStepId: bodyJsonByStepId,
+                    functionCallNameByStepId: Object.fromEntries(
+                      list.map((s) => [s.id, functionCallsByStepId[s.id]?.[0]?.functionName ?? ''])
+                    ),
+                    functionCallArgsByStepId: Object.fromEntries(
+                      list.map((s) => [s.id, functionCallsByStepId[s.id]?.[0]?.args ?? ''])
+                    ),
+                    dbSqlByStepId,
+                    waitSecondsByStepId,
+                  });
+                  const map: Record<string, DebugStepResult> = {};
+                  buildResults.forEach((r, idx) => {
+                    const sid = list[idx]?.id;
+                    if (sid) map[sid] = r;
+                  });
+                  return map;
+                },
+                firstStepId
+              );
+            }}
+          >
             调试
           </Button>
         </div>
@@ -2529,7 +2483,8 @@ export function CaseManagement() {
               gap: 16,
               flex: 1,
               minHeight: 0,
-              overflow: 'auto',
+              overflow: 'hidden',
+              position: 'relative',
             }}
           >
           <Card
@@ -2549,12 +2504,17 @@ export function CaseManagement() {
                       dragReadyStepByCase[caseId] === item.id ? 'grab' : 'pointer',
                     background:
                       item.id === stepId
-                        ? '#e6f4ff'
+                        ? '#bae0ff'
                         : dragOverStepByCase[caseId] === item.id
                           ? '#f0f5ff'
                           : undefined,
+                    borderLeft:
+                      item.id === stepId
+                        ? '3px solid #1677ff'
+                        : '3px solid transparent',
                     padding: '6px 8px',
                     borderRadius: 4,
+                    transition: 'background 0.15s ease, border-color 0.15s ease',
                   }}
                   draggable={dragReadyStepByCase[caseId] === item.id}
                   onMouseDown={(e) => {
@@ -2598,6 +2558,21 @@ export function CaseManagement() {
                       minWidth: 0,
                     }}
                   >
+                    {(() => {
+                      const r = caseDebugResultsByCaseId[caseId]?.[item.id];
+                      if (debugPhase !== 'done' || !r) return null;
+                      return r.ok ? (
+                        <CheckCircleOutlined
+                          aria-label="通过"
+                          style={{ color: '#52c41a', fontSize: 14, flex: '0 0 auto' }}
+                        />
+                      ) : (
+                        <CloseCircleOutlined
+                          aria-label="失败"
+                          style={{ color: '#ff4d4f', fontSize: 14, flex: '0 0 auto' }}
+                        />
+                      );
+                    })()}
                     <Text style={{ flex: '0 0 auto' }}>{item.order}.</Text>
                     <Tag color={stepTypeById[item.id] === '调用函数' ? 'purple' : 'blue'} style={{ marginInlineEnd: 0 }}>
                       {(stepTypeById[item.id] ?? '接口请求') === '自定义接口请求' ? '接口请求' : (stepTypeById[item.id] ?? '接口请求')}
@@ -2717,18 +2692,6 @@ export function CaseManagement() {
                         }
                         options={['GET', 'POST', 'PUT', 'DELETE'].map((m) => ({ label: m, value: m }))}
                         style={{ width: 100 }}
-                      />
-                      <Input
-                        value={
-                          requestHostByStepId[step.id] ??
-                          ENV_DEFAULT_HOST[selectedEnvByCase[caseId] ?? 'SIT'] ??
-                          ENV_DEFAULT_HOST.SIT
-                        }
-                        onChange={(e) =>
-                          setRequestHostByStepId((prev) => ({ ...prev, [step.id]: e.target.value }))
-                        }
-                        placeholder="请输入 IP+端口"
-                        style={{ width: 240 }}
                       />
                       <Input
                         value={requestUrlByStepId[step.id] ?? '/dcs/v1/protocol/upload'}
@@ -4023,21 +3986,47 @@ export function CaseManagement() {
               <Empty description="暂无步骤" />
             )}
           </Card>
+          <CaseDebugStepDrawer
+            open={debugPhase === 'done' && (debugDrawerOpenByCaseId[caseId] ?? false)}
+            onClose={() => setDebugDrawerOpenByCaseId((prev) => ({ ...prev, [caseId]: false }))}
+            result={
+              debugPhase === 'done' && stepId
+                ? caseDebugResultsByCaseId[caseId]?.[stepId] ?? null
+                : null
+            }
+          />
+          {debugPhase === 'done' && !(debugDrawerOpenByCaseId[caseId] ?? false) ? (
+            <Tooltip title="展开调试结果">
+              <button
+                type="button"
+                aria-label="展开调试结果"
+                onClick={() =>
+                  setDebugDrawerOpenByCaseId((prev) => ({ ...prev, [caseId]: true }))
+                }
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  right: 0,
+                  width: 22,
+                  height: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#1677ff',
+                  color: '#fff',
+                  border: 'none',
+                  borderTopLeftRadius: 6,
+                  borderBottomLeftRadius: 6,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+                  zIndex: 10,
+                }}
+              >
+                <DoubleLeftOutlined />
+              </button>
+            </Tooltip>
+          ) : null}
         </div>
-        {debugPhase === 'done' ? (
-          <div
-            style={{
-              flexShrink: 0,
-              maxHeight: '42vh',
-              overflow: 'auto',
-              borderTop: '1px solid #f0f0f0',
-              background: '#fafafa',
-              padding: '4px 4px 12px',
-            }}
-          >
-            <CaseDebugResultLogPanel />
-          </div>
-        ) : null}
         </div>
       </div>
     );

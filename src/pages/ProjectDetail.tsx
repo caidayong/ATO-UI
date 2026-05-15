@@ -322,7 +322,15 @@ export function ProjectDetail() {
       <Descriptions title="基本信息" bordered column={2}>
         <Descriptions.Item label="项目名称">{project.name}</Descriptions.Item>
         <Descriptions.Item label="自动化类型">
-          <Tag color={project.autoType === '接口自动化' ? 'blue' : 'purple'}>
+          <Tag
+            color={
+              project.autoType === '接口自动化'
+                ? 'blue'
+                : project.autoType === 'UI自动化'
+                  ? 'purple'
+                  : 'cyan'
+            }
+          >
             {project.autoType}
           </Tag>
         </Descriptions.Item>

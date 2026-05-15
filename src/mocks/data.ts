@@ -65,7 +65,7 @@ export const mockUsers: User[] = [
 export const mockProjects: Project[] = [
   {
     id: '1',
-    name: 'ATO-支付回归',
+    name: 'S17-3.0',
     autoType: '接口自动化',
     team: 'S17',
     projectType: '平台项目',
@@ -75,7 +75,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: '2',
-    name: 'ATO-订单回归',
+    name: '业务中台',
     autoType: 'UI自动化',
     team: '中台',
     projectType: '平台项目',
@@ -85,7 +85,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: '3',
-    name: 'ATO-用户中心',
+    name: 'FT-3.0',
     autoType: '接口自动化',
     team: 'FT',
     projectType: '整机项目',
@@ -95,7 +95,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: '4',
-    name: 'ATO-风控核心',
+    name: '出租',
     autoType: '接口自动化',
     team: '出租',
     projectType: '整机项目',
@@ -105,13 +105,23 @@ export const mockProjects: Project[] = [
   },
   {
     id: '5',
-    name: 'ATO-支付国际化',
+    name: '校车',
     autoType: 'UI自动化',
     team: '校车',
     projectType: '平台项目',
     region: '重庆',
     createdAt: '2024-03-01 10:00',
     updatedAt: '2024-03-18 15:30',
+  },
+  {
+    id: '6',
+    name: '海外货运',
+    autoType: '设备自动化',
+    team: 'FT',
+    projectType: '整机项目',
+    region: '深圳',
+    createdAt: '2024-03-05 09:30',
+    updatedAt: '2024-03-20 11:15',
   },
 ];
 
@@ -120,7 +130,7 @@ export const mockVersions: ProjectVersion[] = [
     id: '1',
     version: 'v1.0.0',
     projectId: '1',
-    projectName: 'ATO-支付回归',
+    projectName: 'S17-3.0',
     owner: '张三',
     startTime: '2024-02-01 10:00',
     planReleaseDate: '2024-03-20',
@@ -141,7 +151,7 @@ export const mockVersions: ProjectVersion[] = [
     id: '2',
     version: 'v1.2.0',
     projectId: '1',
-    projectName: 'ATO-支付回归',
+    projectName: 'S17-3.0',
     inheritVersion: 'v1.0.0',
     owner: '李四',
     startTime: '2024-03-01 14:30',
@@ -158,7 +168,7 @@ export const mockVersions: ProjectVersion[] = [
     id: '3',
     version: 'v2.0.0',
     projectId: '2',
-    projectName: 'ATO-订单回归',
+    projectName: '业务中台',
     owner: '王五',
     startTime: '2024-02-15 09:00',
     planReleaseDate: '2024-03-25',
@@ -1422,26 +1432,32 @@ export const mockApiEnvironments: ApiEnvironment[] = [
   { id: 'env-dev', name: 'DEV开发环境', baseUrl: 'https://api-dev.company.com' },
 ];
 
-/** 接口管理：接口目录（树形结构） */
+/**
+ * 接口管理：当前登录用户已加入的团队（Mock）
+ *
+ * 现实场景里由后端按 token 返回，本项目作为原型固定为 S17(id=1) + 中台(id=2)。
+ * 团队过滤决定项目下拉里能选哪些项目（项目通过 `Project.team` 字段与团队名匹配）。
+ */
+export const mockCurrentUserTeamIds: string[] = ['1', '2'];
+
+/** 接口管理：接口目录（树形结构） — 项目级目录需带 `projectId`；`root` 全局共享 */
 export const mockApiCategories: ApiCategory[] = [
-  // root
+  // root（项目无关，作为整棵树的共同根节点）
   { id: 'root', parentId: null, name: 'root', sort: 0, createdAt: '2024-01-01 10:00:00', createdBy: '系统' },
-  // 环境-基础
-  { id: 'cat-env-base', parentId: 'root', name: '环境-基础', sort: 10, description: '环境基础操作相关接口', createdAt: '2024-01-10 10:00:00', createdBy: 'A12345（张三）' },
-  // 环境-配置映射
-  { id: 'cat-env-config', parentId: 'root', name: '环境-配置映射', sort: 20, description: '环境配置映射管理', createdAt: '2024-01-15 14:30:00', createdBy: 'A12346（李四）' },
-  // 环境-变量
-  { id: 'cat-env-var', parentId: 'root', name: '环境-变量', sort: 30, description: '环境变量管理', createdAt: '2024-01-20 09:15:00', createdBy: 'A12347（王五）' },
-  // 环境-UI
-  { id: 'cat-env-ui', parentId: 'root', name: '环境-UI', sort: 40, description: '环境UI相关接口', createdAt: '2024-02-01 11:00:00', createdBy: 'A12348（赵六）' },
-  // 环境-部署模型
-  { id: 'cat-env-deploy', parentId: 'root', name: '环境-部署模型', sort: 50, description: '部署模型管理', createdAt: '2024-02-10 16:20:00', createdBy: 'A12349（钱七）' },
-  // 环境-版本快照
-  { id: 'cat-env-snapshot', parentId: 'root', name: '环境-版本快照', sort: 60, description: '版本快照管理', createdAt: '2024-02-15 10:30:00', createdBy: 'A12350（孙八）' },
-  // 环境-执行模块-编辑
-  { id: 'cat-env-exec-edit', parentId: 'root', name: '环境-执行模块-编辑', sort: 70, description: '执行模块编辑接口', createdAt: '2024-02-20 14:00:00', createdBy: 'A12351（周九）' },
-  // 环境-执行模块-运行
-  { id: 'cat-env-exec-run', parentId: 'root', name: '环境-执行模块-运行', sort: 80, description: '执行模块运行接口', createdAt: '2024-02-25 09:45:00', createdBy: 'A12352（吴十）' },
+
+  // ============ 项目 1：S17-3.0（团队 S17） ============
+  { id: 'cat-env-base', parentId: 'root', projectId: '1', name: '环境-基础', sort: 10, description: '环境基础操作相关接口', createdAt: '2024-01-10 10:00:00', createdBy: 'A12345（张三）' },
+  { id: 'cat-env-config', parentId: 'root', projectId: '1', name: '环境-配置映射', sort: 20, description: '环境配置映射管理', createdAt: '2024-01-15 14:30:00', createdBy: 'A12346（李四）' },
+  { id: 'cat-env-var', parentId: 'root', projectId: '1', name: '环境-变量', sort: 30, description: '环境变量管理', createdAt: '2024-01-20 09:15:00', createdBy: 'A12347（王五）' },
+  { id: 'cat-env-ui', parentId: 'root', projectId: '1', name: '环境-UI', sort: 40, description: '环境UI相关接口', createdAt: '2024-02-01 11:00:00', createdBy: 'A12348（赵六）' },
+  { id: 'cat-env-deploy', parentId: 'root', projectId: '1', name: '环境-部署模型', sort: 50, description: '部署模型管理', createdAt: '2024-02-10 16:20:00', createdBy: 'A12349（钱七）' },
+  { id: 'cat-env-snapshot', parentId: 'root', projectId: '1', name: '环境-版本快照', sort: 60, description: '版本快照管理', createdAt: '2024-02-15 10:30:00', createdBy: 'A12350（孙八）' },
+  { id: 'cat-env-exec-edit', parentId: 'root', projectId: '1', name: '环境-执行模块-编辑', sort: 70, description: '执行模块编辑接口', createdAt: '2024-02-20 14:00:00', createdBy: 'A12351（周九）' },
+  { id: 'cat-env-exec-run', parentId: 'root', projectId: '1', name: '环境-执行模块-运行', sort: 80, description: '执行模块运行接口', createdAt: '2024-02-25 09:45:00', createdBy: 'A12352（吴十）' },
+
+  // ============ 项目 2：业务中台（团队 中台） ============
+  { id: 'cat-biz-user', parentId: 'root', projectId: '2', name: '用户中心', sort: 10, description: '用户中心相关接口', createdAt: '2024-02-05 10:00:00', createdBy: 'A12348（赵六）' },
+  { id: 'cat-biz-order', parentId: 'root', projectId: '2', name: '订单中心', sort: 20, description: '订单中心相关接口', createdAt: '2024-02-08 14:00:00', createdBy: 'A12349（钱七）' },
 ];
 
 /** 接口管理：接口定义列表 */
@@ -1470,7 +1486,21 @@ export const mockApiDefinitions: ApiDefinition[] = [
       { name: 'pageSize', defaultValue: '20', required: false, description: '每页条数' },
     ],
     scenarios: [
-      { id: 'sc-001-1', apiId: 'api-001', name: '查询环境列表' },
+      {
+        id: 'sc-001-1',
+        apiId: 'api-001',
+        name: '查询环境列表',
+        description: '与调试页原型一致的 Query 默认值示例',
+        pathParams: [
+          { name: 'server_ip', defaultValue: '', required: false, description: '—' },
+          { name: 'server_port', defaultValue: '', required: false, description: '—' },
+        ],
+        queryParams: [
+          { name: 'type', defaultValue: '1', required: false, description: '环境容器类型…' },
+          { name: 'page', defaultValue: '1', required: false, description: '默认为1' },
+          { name: 'pageSize', defaultValue: '20', required: false, description: '默认为20' },
+        ],
+      },
       { id: 'sc-001-2', apiId: 'api-001', name: '查询变更计划列表' },
       { id: 'sc-001-3', apiId: 'api-001', name: '查询模板-20条/页' },
       { id: 'sc-001-4', apiId: 'api-001', name: '查询指定环境的变更计划' },
@@ -1632,6 +1662,74 @@ export const mockApiDefinitions: ApiDefinition[] = [
     createdAt: '2024-03-13 11:20:00',
     createdBy: 'A12349（钱七）',
     updatedAt: '2024-04-01 13:30:00',
+  },
+
+  // ============ 项目 2：业务中台 ============
+  {
+    id: 'api-biz-001',
+    categoryId: 'cat-biz-user',
+    name: '用户登录',
+    method: 'POST',
+    path: '/biz/user/login',
+    type: 'API',
+    description: '用户名密码登录',
+    createdAt: '2024-02-06 10:00:00',
+    createdBy: 'A12348（赵六）',
+    updatedAt: '2024-03-12 14:00:00',
+    remark: '登录态返回 JWT',
+    requestProtocol: 'HTTP',
+    queryParams: [
+      { name: 'username', defaultValue: '', required: true, description: '账号' },
+      { name: 'password', defaultValue: '', required: true, description: '密码（建议密文）' },
+    ],
+  },
+  {
+    id: 'api-biz-002',
+    categoryId: 'cat-biz-user',
+    name: '用户分页列表',
+    method: 'POST',
+    path: '/biz/user/query_page',
+    type: 'API',
+    description: '分页查询用户列表',
+    createdAt: '2024-02-07 09:30:00',
+    createdBy: 'A12349（钱七）',
+    updatedAt: '2024-03-14 11:30:00',
+    requestProtocol: 'HTTP',
+    queryParams: [
+      { name: 'pageNo', defaultValue: '1', required: false, description: '页码' },
+      { name: 'pageSize', defaultValue: '20', required: false, description: '每页条数' },
+    ],
+  },
+  {
+    id: 'api-biz-003',
+    categoryId: 'cat-biz-order',
+    name: '创建订单',
+    method: 'POST',
+    path: '/biz/order/create',
+    type: 'API',
+    description: '提交新订单',
+    createdAt: '2024-02-09 11:20:00',
+    createdBy: 'A12350（孙八）',
+    updatedAt: '2024-03-16 10:00:00',
+    requestProtocol: 'HTTP',
+  },
+  {
+    id: 'api-biz-004',
+    categoryId: 'cat-biz-order',
+    name: '订单分页查询',
+    method: 'POST',
+    path: '/biz/order/query_page',
+    type: 'API',
+    description: '按条件分页查询订单',
+    createdAt: '2024-02-10 14:00:00',
+    createdBy: 'A12351（周九）',
+    updatedAt: '2024-03-18 09:45:00',
+    requestProtocol: 'HTTP',
+    queryParams: [
+      { name: 'pageNo', defaultValue: '1', required: false, description: '页码' },
+      { name: 'pageSize', defaultValue: '20', required: false, description: '每页条数' },
+      { name: 'status', defaultValue: '', required: false, description: '订单状态' },
+    ],
   },
 ];
 
