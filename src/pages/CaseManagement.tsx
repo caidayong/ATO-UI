@@ -1,6 +1,6 @@
 /**
  * @page 用例管理
- * @version V1.0.30
+ * @version V1.0.40
  * @base docs/spec/04-页面契约.md § 页面 5（用例管理）；ATO_V1.0.0-页面需求与交互规格.md 第 4.5 节（用例管理）
  * @changes
  *   - V1.0.0: 新窗口内 3:7 分栏；目录树（右键菜单占位）；用例列表；用例详情多 Tab；步骤简版编辑器（Mock 状态）
@@ -34,10 +34,20 @@
  *   - V1.0.28: 调用函数步骤 Mock 数据补齐——按步骤标题关键字（幂等/订单号/签名/手机/时间戳/金额）命中预置样本（如 uuid(len=32)、md5(text=...)、random_phone(prefix="138")），未命中按索引轮换 uuid/generate_order_no/now_ms 兜底；返回值、变量提取、断言同步联动 mock。
  *   - V1.0.29: 抽屉中的步骤详情渲染抽取到 src/components/CaseDebugDetail.tsx（DebugStepResultHeader / DebugStepDetailTabs / DebugSection / Extracted / Assertions），供「测试报告」用例详情抽屉复用；本页 UI 行为保持一致。
  *   - V1.0.30: 接口请求步骤 URL 行移除 IP+端口输入（与顶部运行环境一致）；详情顶栏环境选择前增加「运行环境」文案。
+ *   - V1.0.31: 步骤详情「断言」Tab 每条断言行末尾新增「失败中断」复选框（默认选中）；取消选中表示断言失败后继续执行后续步骤。
+ *   - V1.0.32: 步骤栏「添加步骤」行新增「复制步骤」「粘贴步骤」；复制当前选中步骤完整配置至剪贴板，可跨用例详情页粘贴为新增步骤。
+ *   - V1.0.33: 「添加步骤」改为主色按钮；步骤栏与详情栏支持鼠标拖拽调整宽度，默认宽度可完整展示底部三按钮。
+ *   - V1.0.34: 用例管理目录树区域默认宽度收窄，右侧紧贴搜索框与「+」按钮；拖拽最小宽度同步收紧。
+ *   - V1.0.35: 目录树区域默认宽度调整为 300px（最小拖拽宽度仍为 264px）。
+ *   - V1.0.36: 「if判断」步骤改为可嵌套子步骤的集合块；点击行首弹出「条件分支」配置；子步骤添加与顶层「添加步骤」类型一致。
+ *   - V1.0.37: If 块头部复制/删除/添加 hover 显示；弹框仅编辑当前块条件，+Else If/+Else 在步骤栏下方新增独立条件块（非弹框内叠分支）。
+ *   - V1.0.38: 条件弹框底部增加「+判断条件」；支持双条件横向编排，中间「或/且」连接（默认或），最多两条。
+ *   - V1.0.39: 双条件弹框加宽；表达式/预期值接入 DynamicValueTextArea，荧光棒 hover 显示（公共组件）。
+ *   - V1.0.40: 断言 Tab「失败中断」列表头增加全选复选框（默认勾选），支持批量开启/取消。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent, MouseEvent } from 'react';
+import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -50,7 +60,6 @@ import {
   Form,
   Input,
   InputNumber,
-  List,
   Modal,
   Select,
   Space,
@@ -92,6 +101,15 @@ import {
   UploadOutlined,
   DownOutlined,
 } from '@ant-design/icons';
+import { CaseIfStepBlock } from '@/components/CaseIfStepBlock';
+import {
+  defaultIfStepConfig,
+  findInsertIndexAfterStep,
+  normalizeIfStepConfig,
+  type IfBranchKind,
+  type IfStepConfig,
+  syncIfStepTitle,
+} from '@/utils/caseIfStep';
 import {
   mockCaseModules,
   mockCaseSteps,
@@ -170,6 +188,8 @@ type AssertRow = {
     | '长度等于';
   negate: boolean;
   expected: string;
+  /** 断言失败时是否中断后续步骤；默认 true */
+  stopOnFailure: boolean;
 };
 type FunctionCallRow = {
   id: string;
@@ -204,8 +224,109 @@ type FunctionAssertRow = {
     | '长度等于';
   negate: boolean;
   expected: string;
+  /** 断言失败时是否中断后续步骤；默认 true */
+  stopOnFailure: boolean;
 };
 type DbType = 'MariaDb' | 'ClickHouse';
+
+/** 断言 Tab 表格列宽与间距（接口请求 / 调用函数·数据库操作 两套） */
+const ASSERT_API_GRID_COLUMNS = 'minmax(0,1fr) 108px minmax(0,1fr) 128px 52px minmax(0,1fr) 84px 28px';
+const ASSERT_FN_DB_GRID_COLUMNS = 'minmax(0,1fr) 100px minmax(0,1fr) 112px 52px minmax(0,1fr) 84px 28px';
+const assertRowGridBaseStyle: CSSProperties = { gap: 6, alignItems: 'center' };
+const assertCheckboxCellStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+};
+const assertCheckboxHeaderStyle: CSSProperties = { textAlign: 'center' };
+
+type AssertStopOnFailureRow = { stopOnFailure?: boolean };
+
+function assertRowStopOnFailure(row: AssertStopOnFailureRow): boolean {
+  return row.stopOnFailure ?? true;
+}
+
+function getAssertStopOnFailureHeaderState(rows: AssertStopOnFailureRow[]) {
+  if (rows.length === 0) return { checked: true, indeterminate: false };
+  const onCount = rows.filter(assertRowStopOnFailure).length;
+  return {
+    checked: onCount === rows.length,
+    indeterminate: onCount > 0 && onCount < rows.length,
+  };
+}
+
+/** 断言 Tab「失败中断」列表头：全选 / 半选 / 批量切换 */
+function AssertStopOnFailureHeader({
+  rows,
+  onToggleAll,
+}: {
+  rows: AssertStopOnFailureRow[];
+  onToggleAll: (stopOnFailure: boolean) => void;
+}) {
+  const { checked, indeterminate } = getAssertStopOnFailureHeaderState(rows);
+  return (
+    <div style={{ ...assertCheckboxCellStyle, gap: 4, flexWrap: 'nowrap' }}>
+      <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>失败中断</span>
+      <Checkbox
+        checked={checked}
+        indeterminate={indeterminate}
+        disabled={rows.length === 0}
+        onChange={(e) => onToggleAll(e.target.checked)}
+      />
+    </div>
+  );
+}
+
+/** 步骤栏复制/粘贴：跨用例保留的步骤配置快照 */
+type CopiedStepClipboard = {
+  title: string;
+  detail: string;
+  stepType: StepType;
+  requestMethod?: string;
+  requestProtocol?: string;
+  requestUrl?: string;
+  pathParams?: RequestParamRow[];
+  queryParams?: RequestParamRow[];
+  headers?: RequestParamRow[];
+  bodyMode?: BodyMode;
+  bodyFormData?: BodyParamRow[];
+  bodyUrlEncoded?: BodyParamRow[];
+  bodyJson?: string;
+  extractRows?: ExtractRow[];
+  assertRows?: AssertRow[];
+  functionCalls?: FunctionCallRow[];
+  functionExtractRows?: FunctionExtractRow[];
+  functionAssertRows?: FunctionAssertRow[];
+  dbType?: DbType;
+  dbTab?: 'SQL命令' | '变量提取' | '断言';
+  dbSql?: string;
+  dbExtractRows?: FunctionExtractRow[];
+  dbAssertRows?: FunctionAssertRow[];
+  waitSeconds?: number;
+  requestTab?: string;
+  funcTab?: string;
+  parentStepId?: string;
+  ifConfig?: IfStepConfig;
+  ifChainRoot?: string;
+};
+
+function cloneRowList<T extends { id: string }>(rows: T[], prefix: string): T[] {
+  return rows.map((row, index) => ({
+    ...row,
+    id: `${prefix}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+  }));
+}
+
+/** 用例详情内步骤栏默认/最小宽度（px），需容纳「添加步骤 + 复制 + 粘贴」三按钮 */
+const STEP_PANE_DEFAULT_WIDTH_PX = 328;
+const STEP_PANE_MIN_WIDTH_PX = 280;
+
+/** 目录树区域：搜索框 + 间距 + 「+」按钮 + 卡片左右内边距（12*2） */
+const TREE_SEARCH_INPUT_WIDTH_PX = 232;
+const TREE_PANE_MIN_WIDTH_PX =
+  TREE_SEARCH_INPUT_WIDTH_PX + 8 + 32 + 24;
+const TREE_PANE_DEFAULT_WIDTH_PX = 300;
+
 const ENV_DEFAULT_HOST: Record<string, string> = {
   DEV: '10.10.10.10:18080',
   SIT: '192.168.143.134:21250',
@@ -468,6 +589,14 @@ export function CaseManagement() {
   const [dbStepCreateOpen, setDbStepCreateOpen] = useState(false);
   const [dbStepCreateCaseId, setDbStepCreateCaseId] = useState('');
   const [dbStepCreateAfterStepId, setDbStepCreateAfterStepId] = useState<string | undefined>(undefined);
+  const [dbStepCreateParentStepId, setDbStepCreateParentStepId] = useState<string | undefined>(undefined);
+  const [stepParentById, setStepParentById] = useState<Record<string, string>>({});
+  const [ifConfigByStepId, setIfConfigByStepId] = useState<Record<string, IfStepConfig>>(() => ({
+    'st-5': defaultIfStepConfig('st-5', 'if'),
+  }));
+  /** If 链：Else If / Else 根步骤指向链首 If 步骤 id */
+  const [ifChainRootByStepId, setIfChainRootByStepId] = useState<Record<string, string>>({});
+  const [ifConditionPopoverStepId, setIfConditionPopoverStepId] = useState<string | null>(null);
   const [dbStepCreateType, setDbStepCreateType] = useState<DbType>('MariaDb');
   const [dbStepCreateName, setDbStepCreateName] = useState('');
   const [dbTypeByStepId, setDbTypeByStepId] = useState<Record<string, DbType>>({});
@@ -489,8 +618,11 @@ export function CaseManagement() {
   const [moduleTagGroupByModuleId, setModuleTagGroupByModuleId] = useState<
     Record<string, { groupId?: string; tags: string[] }>
   >({});
-  const [leftPaneWidth, setLeftPaneWidth] = useState(22);
+  const [treePaneWidthPx, setTreePaneWidthPx] = useState(TREE_PANE_DEFAULT_WIDTH_PX);
   const [isResizing, setIsResizing] = useState(false);
+  const [stepPaneWidthPx, setStepPaneWidthPx] = useState(STEP_PANE_DEFAULT_WIDTH_PX);
+  const [isStepPaneResizing, setIsStepPaneResizing] = useState(false);
+  const stepSplitRef = useRef<HTMLDivElement | null>(null);
   const splitRef = useRef<HTMLDivElement | null>(null);
   const [dragReadyModuleId, setDragReadyModuleId] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -506,6 +638,8 @@ export function CaseManagement() {
   const [copyAssertToOpen, setCopyAssertToOpen] = useState(false);
   const [copyAssertCaseIdsInput, setCopyAssertCaseIdsInput] = useState('');
   const [copyAssertSource, setCopyAssertSource] = useState<{ caseId: string; stepId: string } | null>(null);
+  /** 步骤栏复制/粘贴剪贴板（跨用例、跨 Tab 保留） */
+  const [copiedStepClipboard, setCopiedStepClipboard] = useState<CopiedStepClipboard | null>(null);
   const [exportCasesOpen, setExportCasesOpen] = useState(false);
   const [exportModuleIds, setExportModuleIds] = useState<string[]>([]);
   const [copyCasesToModalOpen, setCopyCasesToModalOpen] = useState(false);
@@ -746,11 +880,10 @@ export function CaseManagement() {
       const container = splitRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const raw = ((e.clientX - rect.left) / rect.width) * 100;
-      // 至少容纳搜索框 + 间距 + 添加按钮，避免控件换行/挤压
-      const minPercent = (340 / rect.width) * 100;
-      const clamped = Math.max(minPercent, Math.min(45, raw));
-      setLeftPaneWidth(clamped);
+      const raw = e.clientX - rect.left;
+      const max = Math.max(TREE_PANE_MIN_WIDTH_PX, rect.width * 0.42);
+      const clamped = Math.max(TREE_PANE_MIN_WIDTH_PX, Math.min(max, raw));
+      setTreePaneWidthPx(clamped);
     };
     const onUp = () => setIsResizing(false);
     window.addEventListener('mousemove', onMove);
@@ -760,6 +893,26 @@ export function CaseManagement() {
       window.removeEventListener('mouseup', onUp);
     };
   }, [isResizing]);
+
+  useEffect(() => {
+    if (!isStepPaneResizing) return undefined;
+    const onMove = (e: globalThis.MouseEvent) => {
+      const container = stepSplitRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const raw = e.clientX - rect.left;
+      const max = Math.max(STEP_PANE_MIN_WIDTH_PX, rect.width * 0.52);
+      const clamped = Math.max(STEP_PANE_MIN_WIDTH_PX, Math.min(max, raw));
+      setStepPaneWidthPx(clamped);
+    };
+    const onUp = () => setIsStepPaneResizing(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isStepPaneResizing]);
 
   useEffect(() => {
     const onDocMouseDown = (e: globalThis.MouseEvent) => {
@@ -798,6 +951,100 @@ export function CaseManagement() {
         .sort((a, b) => a.order - b.order),
     [steps]
   );
+
+  const getRootSteps = useCallback(
+    (caseId: string) => getSteps(caseId).filter((s) => !stepParentById[s.id]),
+    [getSteps, stepParentById]
+  );
+
+  const getChildSteps = useCallback(
+    (caseId: string, parentStepId: string) =>
+      getSteps(caseId).filter((s) => stepParentById[s.id] === parentStepId),
+    [getSteps, stepParentById]
+  );
+
+  const getIfConfig = (stepId: string): IfStepConfig =>
+    normalizeIfStepConfig(stepId, ifConfigByStepId[stepId]);
+
+  const getIfChainRootId = (stepId: string) => ifChainRootByStepId[stepId] ?? stepId;
+
+  const getIfChainMemberIds = (caseId: string, rootId: string) => {
+    const all = getSteps(caseId);
+    return all
+      .filter((s) => {
+        const t = stepTypeById[s.id] ?? '接口请求';
+        return t === 'if判断' && getIfChainRootId(s.id) === rootId;
+      })
+      .map((s) => s.id);
+  };
+
+  const findInsertIndexAfterIfChain = (caseId: string, fromStepId: string) => {
+    const all = getSteps(caseId);
+    const rootId = getIfChainRootId(fromStepId);
+    const memberIds = new Set(getIfChainMemberIds(caseId, rootId));
+    let lastMemberId = fromStepId;
+    all.forEach((s) => {
+      if (memberIds.has(s.id)) lastMemberId = s.id;
+    });
+    return findInsertIndexAfterStep(all, lastMemberId, stepParentById);
+  };
+
+  const getIfChainBranchFlags = (caseId: string, fromStepId: string) => {
+    const rootId = getIfChainRootId(fromStepId);
+    const members = getIfChainMemberIds(caseId, rootId).map((id) => getIfConfig(id));
+    return {
+      hasElseIf: members.some((c) => c.branchKind === 'elseif'),
+      hasElse: members.some((c) => c.branchKind === 'else'),
+    };
+  };
+
+  const addIfSiblingBranch = (caseId: string, fromStepId: string, kind: IfBranchKind) => {
+    const flags = getIfChainBranchFlags(caseId, fromStepId);
+    if (kind === 'elseif' && flags.hasElse) {
+      message.warning('已存在 Else 分支，无法再添加 Else If');
+      return;
+    }
+    if (kind === 'else' && flags.hasElse) {
+      message.warning('已存在 Else 分支');
+      return;
+    }
+    const rootId = getIfChainRootId(fromStepId);
+    const insertIndex = findInsertIndexAfterIfChain(caseId, fromStepId);
+    const sid = `st-${Date.now()}`;
+    const cfg = defaultIfStepConfig(sid, kind);
+    const all = getSteps(caseId);
+    const nextList = [...all];
+    nextList.splice(insertIndex, 0, {
+      id: sid,
+      caseId,
+      order: insertIndex + 1,
+      title: syncIfStepTitle(cfg, kind === 'elseif' ? 'Else If 分支' : 'Else 分支'),
+      detail: '',
+    });
+    const normalized = nextList.map((s, idx) => ({ ...s, order: idx + 1 }));
+    setSteps((prev) => [...prev.filter((s) => s.caseId !== caseId), ...normalized]);
+    setStepTypeById((prev) => ({ ...prev, [sid]: 'if判断' }));
+    setIfConfigByStepId((prev) => ({ ...prev, [sid]: cfg }));
+    setIfChainRootByStepId((prev) => ({ ...prev, [sid]: rootId }));
+    setActiveStepByCase((prev) => ({ ...prev, [caseId]: sid }));
+    setIfConditionPopoverStepId(null);
+    message.success(kind === 'elseif' ? '已添加 Else If 分支' : '已添加 Else 分支');
+  };
+
+  const collectDescendantStepIds = (caseId: string, rootStepId: string): string[] => {
+    const all = getSteps(caseId);
+    const ids: string[] = [];
+    const walk = (parentId: string) => {
+      all.forEach((s) => {
+        if (stepParentById[s.id] === parentId) {
+          ids.push(s.id);
+          walk(s.id);
+        }
+      });
+    };
+    walk(rootStepId);
+    return ids;
+  };
 
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -1258,23 +1505,48 @@ export function CaseManagement() {
     caseId: string,
     stepType: StepType,
     afterStepId?: string,
-    payload?: { title?: string; detail?: string; onCreated?: (sid: string) => void }
+    payload?: {
+      title?: string;
+      detail?: string;
+      parentStepId?: string;
+      onCreated?: (sid: string) => void;
+    }
   ) => {
     const sid = `st-${Date.now()}`;
-    const baseList = getSteps(caseId);
-    const insertIndex = afterStepId ? baseList.findIndex((s) => s.id === afterStepId) + 1 : baseList.length;
-    const normalizedIndex = insertIndex < 0 ? baseList.length : insertIndex;
-    const nextList = [...baseList];
-    nextList.splice(normalizedIndex, 0, {
+    const parentStepId = payload?.parentStepId;
+    const all = getSteps(caseId);
+    let insertIndex = all.length;
+    if (parentStepId) {
+      if (afterStepId) {
+        insertIndex = findInsertIndexAfterStep(all, afterStepId, stepParentById);
+      } else {
+        const children = getChildSteps(caseId, parentStepId);
+        const anchor = children.length > 0 ? children[children.length - 1].id : parentStepId;
+        insertIndex = findInsertIndexAfterStep(all, anchor, stepParentById);
+      }
+    } else if (afterStepId) {
+      insertIndex = findInsertIndexAfterStep(all, afterStepId, stepParentById);
+    }
+    let stepTitle = payload?.title ?? `${stepType}步骤`;
+    if (stepType === 'if判断') {
+      const cfg = defaultIfStepConfig(sid, 'if');
+      setIfConfigByStepId((prev) => ({ ...prev, [sid]: cfg }));
+      stepTitle = syncIfStepTitle(cfg, stepTitle);
+    }
+    const nextList = [...all];
+    nextList.splice(insertIndex, 0, {
       id: sid,
       caseId,
-      order: normalizedIndex + 1,
-      title: payload?.title ?? `${stepType}步骤`,
+      order: insertIndex + 1,
+      title: stepTitle,
       detail: payload?.detail ?? '',
     });
     const normalized = nextList.map((s, idx) => ({ ...s, order: idx + 1 }));
     setSteps((prev) => [...prev.filter((s) => s.caseId !== caseId), ...normalized]);
     setStepTypeById((prev) => ({ ...prev, [sid]: stepType }));
+    if (parentStepId) {
+      setStepParentById((prev) => ({ ...prev, [sid]: parentStepId }));
+    }
     setActiveStepByCase((prev) => ({ ...prev, [caseId]: sid }));
     payload?.onCreated?.(sid);
   };
@@ -1300,16 +1572,43 @@ export function CaseManagement() {
   };
 
   const deleteStep = (caseId: string, stepId: string) => {
+    const removeIds = new Set([stepId, ...collectDescendantStepIds(caseId, stepId)]);
+    const ifCfg = getIfConfig(stepId);
+    if ((stepTypeById[stepId] ?? '') === 'if判断' && ifCfg.branchKind === 'if' && !ifChainRootByStepId[stepId]) {
+      getIfChainMemberIds(caseId, stepId).forEach((memberId) => {
+        if (memberId === stepId) return;
+        removeIds.add(memberId);
+        collectDescendantStepIds(caseId, memberId).forEach((id) => removeIds.add(id));
+      });
+    }
     const baseList = getSteps(caseId);
-    const nextList = baseList.filter((s) => s.id !== stepId).map((s, idx) => ({ ...s, order: idx + 1 }));
+    const nextList = baseList.filter((s) => !removeIds.has(s.id)).map((s, idx) => ({ ...s, order: idx + 1 }));
     setSteps((prev) => [...prev.filter((s) => s.caseId !== caseId), ...nextList]);
     setStepTypeById((prev) => {
       const next = { ...prev };
-      delete next[stepId];
+      removeIds.forEach((id) => delete next[id]);
       return next;
     });
+    setStepParentById((prev) => {
+      const next = { ...prev };
+      removeIds.forEach((id) => delete next[id]);
+      return next;
+    });
+    setIfConfigByStepId((prev) => {
+      const next = { ...prev };
+      removeIds.forEach((id) => delete next[id]);
+      return next;
+    });
+    setIfChainRootByStepId((prev) => {
+      const next = { ...prev };
+      removeIds.forEach((id) => delete next[id]);
+      return next;
+    });
+    if (ifConditionPopoverStepId && removeIds.has(ifConditionPopoverStepId)) {
+      setIfConditionPopoverStepId(null);
+    }
     setActiveStepByCase((prev) => {
-      const nextActive = nextList[0]?.id ?? '';
+      const nextActive = nextList.find((s) => !stepParentById[s.id])?.id ?? nextList[0]?.id ?? '';
       return { ...prev, [caseId]: nextActive };
     });
   };
@@ -1455,15 +1754,22 @@ export function CaseManagement() {
   };
 
   const reorderSteps = (caseId: string, dragId: string, dropId: string, before: boolean) => {
-    const list = getSteps(caseId);
-    const fromIndex = list.findIndex((s) => s.id === dragId);
-    const toIndex = list.findIndex((s) => s.id === dropId);
+    const roots = getRootSteps(caseId);
+    const fromIndex = roots.findIndex((s) => s.id === dragId);
+    const toIndex = roots.findIndex((s) => s.id === dropId);
     if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
-    const next = [...list];
-    const [moved] = next.splice(fromIndex, 1);
-    const insertAt = before ? (fromIndex < toIndex ? toIndex - 1 : toIndex) : fromIndex < toIndex ? toIndex : toIndex + 1;
-    next.splice(insertAt, 0, moved);
-    const normalized = next.map((s, idx) => ({ ...s, order: idx + 1 }));
+    const nextRoots = [...roots];
+    const [moved] = nextRoots.splice(fromIndex, 1);
+    const insertAt = before
+      ? fromIndex < toIndex
+        ? toIndex - 1
+        : toIndex
+      : fromIndex < toIndex
+        ? toIndex
+        : toIndex + 1;
+    nextRoots.splice(insertAt, 0, moved);
+    const flat = nextRoots.flatMap((r) => [r, ...getChildSteps(caseId, r.id)]);
+    const normalized = flat.map((s, idx) => ({ ...s, order: idx + 1 }));
     setSteps((prev) => [...prev.filter((s) => s.caseId !== caseId), ...normalized]);
   };
 
@@ -1722,12 +2028,19 @@ export function CaseManagement() {
         op: '等于',
         negate: false,
         expected: '200',
+        stopOnFailure: true,
       },
     ];
   const updateAssertRow = (stepId: string, rowId: string, patch: Partial<AssertRow>) => {
     setAssertRowsByStepId((prev) => ({
       ...prev,
       [stepId]: getAssertRows(stepId).map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
+    }));
+  };
+  const setAllAssertStopOnFailure = (stepId: string, stopOnFailure: boolean) => {
+    setAssertRowsByStepId((prev) => ({
+      ...prev,
+      [stepId]: getAssertRows(stepId).map((r) => ({ ...r, stopOnFailure })),
     }));
   };
   const addAssertRow = (stepId: string) => {
@@ -1739,6 +2052,7 @@ export function CaseManagement() {
       op: '等于',
       negate: false,
       expected: '',
+      stopOnFailure: true,
     };
     setAssertRowsByStepId((prev) => ({ ...prev, [stepId]: [...getAssertRows(stepId), newRow] }));
   };
@@ -1838,9 +2152,10 @@ export function CaseManagement() {
     setChooseFunctionModalOpen(false);
     setChooseFunctionValue('');
   };
-  const openDbStepCreate = (caseId: string, afterStepId?: string) => {
+  const openDbStepCreate = (caseId: string, afterStepId?: string, parentStepId?: string) => {
     setDbStepCreateCaseId(caseId);
     setDbStepCreateAfterStepId(afterStepId);
+    setDbStepCreateParentStepId(parentStepId);
     setDbStepCreateType('MariaDb');
     setDbStepCreateName('');
     setDbStepCreateOpen(true);
@@ -1853,12 +2168,14 @@ export function CaseManagement() {
     }
     addStepAt(dbStepCreateCaseId, '数据库操作', dbStepCreateAfterStepId, {
       title: name,
+      parentStepId: dbStepCreateParentStepId,
       onCreated: (sid) => {
         setDbTypeByStepId((prev) => ({ ...prev, [sid]: dbStepCreateType }));
         setDbTabByStepId((prev) => ({ ...prev, [sid]: 'SQL命令' }));
       },
     });
     setDbStepCreateOpen(false);
+    setDbStepCreateParentStepId(undefined);
   };
 
   const getFunctionSourceOptions = (stepId: string) =>
@@ -1898,6 +2215,7 @@ export function CaseManagement() {
         op: '等于',
         negate: false,
         expected: '',
+        stopOnFailure: true,
       },
     ];
   const addFunctionAssertRow = (stepId: string) => {
@@ -1910,6 +2228,7 @@ export function CaseManagement() {
       op: '等于',
       negate: false,
       expected: '',
+      stopOnFailure: true,
     };
     setFunctionAssertRowsByStepId((prev) => ({ ...prev, [stepId]: [...getFunctionAssertRows(stepId), row] }));
   };
@@ -1917,6 +2236,12 @@ export function CaseManagement() {
     setFunctionAssertRowsByStepId((prev) => ({
       ...prev,
       [stepId]: getFunctionAssertRows(stepId).map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
+    }));
+  };
+  const setAllFunctionAssertStopOnFailure = (stepId: string, stopOnFailure: boolean) => {
+    setFunctionAssertRowsByStepId((prev) => ({
+      ...prev,
+      [stepId]: getFunctionAssertRows(stepId).map((r) => ({ ...r, stopOnFailure })),
     }));
   };
   const deleteFunctionAssertRow = (stepId: string, rowId: string) => {
@@ -1978,7 +2303,16 @@ export function CaseManagement() {
   };
   const getDbAssertRows = (stepId: string): FunctionAssertRow[] =>
     dbAssertRowsByStepId[stepId] ?? [
-      { id: `dba-init-${stepId}`, desc: '', source: 'SQL查询', target: '', op: '等于', negate: false, expected: '' },
+      {
+        id: `dba-init-${stepId}`,
+        desc: '',
+        source: 'SQL查询',
+        target: '',
+        op: '等于',
+        negate: false,
+        expected: '',
+        stopOnFailure: true,
+      },
     ];
   const addDbAssertRow = (stepId: string) => {
     const row: FunctionAssertRow = {
@@ -1989,6 +2323,7 @@ export function CaseManagement() {
       op: '等于',
       negate: false,
       expected: '',
+      stopOnFailure: true,
     };
     setDbAssertRowsByStepId((prev) => ({ ...prev, [stepId]: [...getDbAssertRows(stepId), row] }));
   };
@@ -1996,6 +2331,12 @@ export function CaseManagement() {
     setDbAssertRowsByStepId((prev) => ({
       ...prev,
       [stepId]: getDbAssertRows(stepId).map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
+    }));
+  };
+  const setAllDbAssertStopOnFailure = (stepId: string, stopOnFailure: boolean) => {
+    setDbAssertRowsByStepId((prev) => ({
+      ...prev,
+      [stepId]: getDbAssertRows(stepId).map((r) => ({ ...r, stopOnFailure })),
     }));
   };
   const deleteDbAssertRow = (stepId: string, rowId: string) => {
@@ -2010,6 +2351,198 @@ export function CaseManagement() {
       cancelText: '取消',
       onOk: () => deleteDbAssertRow(stepId, rowId),
     });
+  };
+
+  const buildStepClipboardSnapshot = (stepId: string, step: CaseStep): CopiedStepClipboard => ({
+    title: step.title,
+    detail: step.detail,
+    stepType: stepTypeById[stepId] ?? '接口请求',
+    requestMethod: requestMethodByStepId[stepId],
+    requestProtocol: requestProtocolByStepId[stepId],
+    requestUrl: requestUrlByStepId[stepId],
+    pathParams: getPathParams(stepId),
+    queryParams: getQueryParams(stepId),
+    headers: getHeaders(stepId),
+    bodyMode: getBodyMode(stepId),
+    bodyFormData: getBodyFormData(stepId),
+    bodyUrlEncoded: getBodyUrlEncoded(stepId),
+    bodyJson: bodyJsonByStepId[stepId],
+    extractRows: getExtractRows(stepId),
+    assertRows: getAssertRows(stepId),
+    functionCalls: getFunctionCalls(stepId),
+    functionExtractRows: getFunctionExtractRows(stepId),
+    functionAssertRows: getFunctionAssertRows(stepId),
+    dbType: dbTypeByStepId[stepId],
+    dbTab: dbTabByStepId[stepId],
+    dbSql: dbSqlByStepId[stepId],
+    dbExtractRows: getDbExtractRows(stepId),
+    dbAssertRows: getDbAssertRows(stepId),
+    waitSeconds: waitSecondsByStepId[stepId],
+    requestTab: requestTabByStepId[stepId],
+    funcTab: funcTabByStepId[stepId],
+    parentStepId: stepParentById[stepId],
+    ifConfig:
+      (stepTypeById[stepId] ?? '接口请求') === 'if判断'
+        ? JSON.parse(JSON.stringify(getIfConfig(stepId)))
+        : undefined,
+    ifChainRoot:
+      (stepTypeById[stepId] ?? '接口请求') === 'if判断' ? getIfChainRootId(stepId) : undefined,
+  });
+
+  const applyCopiedStepConfig = (newStepId: string, snap: CopiedStepClipboard) => {
+    setStepTypeById((prev) => ({ ...prev, [newStepId]: snap.stepType }));
+    if (snap.requestMethod != null) {
+      setRequestMethodByStepId((prev) => ({ ...prev, [newStepId]: snap.requestMethod! }));
+    }
+    if (snap.requestProtocol != null) {
+      setRequestProtocolByStepId((prev) => ({ ...prev, [newStepId]: snap.requestProtocol! }));
+    }
+    if (snap.requestUrl != null) {
+      setRequestUrlByStepId((prev) => ({ ...prev, [newStepId]: snap.requestUrl! }));
+    }
+    if (snap.pathParams != null) {
+      setRequestPathParamsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.pathParams!, 'path'),
+      }));
+    }
+    if (snap.queryParams != null) {
+      setRequestQueryParamsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.queryParams!, 'q'),
+      }));
+    }
+    if (snap.headers != null) {
+      setRequestHeadersByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.headers!, 'h'),
+      }));
+    }
+    if (snap.bodyMode != null) {
+      setBodyModeByStepId((prev) => ({ ...prev, [newStepId]: snap.bodyMode! }));
+    }
+    if (snap.bodyFormData != null) {
+      setBodyFormDataByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.bodyFormData!, 'bf'),
+      }));
+    }
+    if (snap.bodyUrlEncoded != null) {
+      setBodyUrlEncodedByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.bodyUrlEncoded!, 'bu'),
+      }));
+    }
+    if (snap.bodyJson != null) {
+      setBodyJsonByStepId((prev) => ({ ...prev, [newStepId]: snap.bodyJson! }));
+    }
+    if (snap.extractRows != null) {
+      setExtractRowsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.extractRows!, 'ex'),
+      }));
+    }
+    if (snap.assertRows != null) {
+      setAssertRowsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.assertRows!, 'as'),
+      }));
+    }
+    if (snap.functionCalls != null) {
+      setFunctionCallsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.functionCalls!, 'fc'),
+      }));
+    }
+    if (snap.functionExtractRows != null) {
+      setFunctionExtractRowsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.functionExtractRows!, 'fx'),
+      }));
+    }
+    if (snap.functionAssertRows != null) {
+      setFunctionAssertRowsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.functionAssertRows!, 'fa'),
+      }));
+    }
+    if (snap.dbType != null) {
+      setDbTypeByStepId((prev) => ({ ...prev, [newStepId]: snap.dbType! }));
+    }
+    if (snap.dbTab != null) {
+      setDbTabByStepId((prev) => ({ ...prev, [newStepId]: snap.dbTab! }));
+    }
+    if (snap.dbSql != null) {
+      setDbSqlByStepId((prev) => ({ ...prev, [newStepId]: snap.dbSql! }));
+    }
+    if (snap.dbExtractRows != null) {
+      setDbExtractRowsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.dbExtractRows!, 'dbx'),
+      }));
+    }
+    if (snap.dbAssertRows != null) {
+      setDbAssertRowsByStepId((prev) => ({
+        ...prev,
+        [newStepId]: cloneRowList(snap.dbAssertRows!, 'dba'),
+      }));
+    }
+    if (snap.waitSeconds != null) {
+      setWaitSecondsByStepId((prev) => ({ ...prev, [newStepId]: snap.waitSeconds! }));
+    }
+    if (snap.requestTab != null) {
+      setRequestTabByStepId((prev) => ({ ...prev, [newStepId]: snap.requestTab! }));
+    }
+    if (snap.funcTab != null) {
+      setFuncTabByStepId((prev) => ({ ...prev, [newStepId]: snap.funcTab! }));
+    }
+    if (snap.parentStepId) {
+      setStepParentById((prev) => ({ ...prev, [newStepId]: snap.parentStepId! }));
+    }
+    if (snap.ifConfig) {
+      const cfg = JSON.parse(JSON.stringify(snap.ifConfig)) as IfStepConfig;
+      setIfConfigByStepId((prev) => ({ ...prev, [newStepId]: cfg }));
+      if (cfg.branchKind !== 'if' && snap.ifChainRoot) {
+        setIfChainRootByStepId((prev) => ({ ...prev, [newStepId]: snap.ifChainRoot! }));
+      }
+    }
+  };
+
+  const copyStepToClipboard = (caseId: string) => {
+    const list = getSteps(caseId);
+    const stepId = activeStepByCase[caseId] || list[0]?.id;
+    if (!stepId) {
+      message.warning('请先选中要复制的步骤');
+      return;
+    }
+    const step = list.find((s) => s.id === stepId);
+    if (!step) return;
+    setCopiedStepClipboard(buildStepClipboardSnapshot(stepId, step));
+    message.success('已复制步骤');
+  };
+
+  const pasteStepFromClipboard = (caseId: string) => {
+    if (!copiedStepClipboard) {
+      message.warning('请先复制步骤');
+      return;
+    }
+    const snap = copiedStepClipboard;
+    const sid = `st-${Date.now()}`;
+    const baseList = getSteps(caseId);
+    const nextList = [
+      ...baseList,
+      {
+        id: sid,
+        caseId,
+        order: baseList.length + 1,
+        title: snap.title,
+        detail: snap.detail,
+      },
+    ].map((s, idx) => ({ ...s, order: idx + 1 }));
+    setSteps((prev) => [...prev.filter((s) => s.caseId !== caseId), ...nextList]);
+    applyCopiedStepConfig(sid, snap);
+    setActiveStepByCase((prev) => ({ ...prev, [caseId]: sid }));
+    message.success('已粘贴步骤');
   };
 
   const openBodyJsonDynamicValue = (stepId: string) => {
@@ -2354,6 +2887,7 @@ export function CaseManagement() {
     const tc = getCase(caseId);
     if (!tc) return null;
     const list = getSteps(caseId);
+    const rootSteps = getRootSteps(caseId);
     const stepId = activeStepByCase[caseId] || list[0]?.id || '';
     const step = list.find((s) => s.id === stepId);
     const stepType: StepType = step ? stepTypeById[step.id] ?? '接口请求' : '接口请求';
@@ -2476,28 +3010,87 @@ export function CaseManagement() {
           }}
         >
           <div
+            ref={stepSplitRef}
             className="case-detail-main-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: '240px 1fr',
-              gap: 16,
+              display: 'flex',
               flex: 1,
               minHeight: 0,
               overflow: 'hidden',
               position: 'relative',
+              alignItems: 'stretch',
             }}
           >
           <Card
             size="small"
             title="步骤"
-            style={{ height: '100%' }}
+            style={{
+              flex: `0 0 ${stepPaneWidthPx}px`,
+              width: stepPaneWidthPx,
+              minWidth: STEP_PANE_MIN_WIDTH_PX,
+              maxWidth: '52%',
+              height: '100%',
+            }}
             styles={{ body: { padding: 8, height: '100%', overflow: 'auto' } }}
           >
-            <List
-              size="small"
-              dataSource={list}
-              renderItem={(item) => (
-                <List.Item
+            <div className="case-step-list">
+              {rootSteps.map((item) => {
+                const itemType = stepTypeById[item.id] ?? '接口请求';
+                if (itemType === 'if判断') {
+                  const ifCfg = getIfConfig(item.id);
+                  const chainFlags = getIfChainBranchFlags(caseId, item.id);
+                  return (
+                    <CaseIfStepBlock
+                      key={item.id}
+                      caseId={caseId}
+                      step={item}
+                      selected={item.id === stepId}
+                      config={ifCfg}
+                      childSteps={getChildSteps(caseId, item.id)}
+                      stepTypeById={stepTypeById}
+                      activeStepId={stepId}
+                      conditionPopoverOpen={ifConditionPopoverStepId === item.id}
+                      canAddElseIf={!chainFlags.hasElse}
+                      canAddElse={!chainFlags.hasElse}
+                      onAddSiblingBranch={(kind) => addIfSiblingBranch(caseId, item.id, kind)}
+                      onToggleExpand={() =>
+                        setIfConfigByStepId((prev) => ({
+                          ...prev,
+                          [item.id]: { ...ifCfg, expanded: ifCfg.expanded === false },
+                        }))
+                      }
+                      onOpenConditionPopover={() => setIfConditionPopoverStepId(item.id)}
+                      onCloseConditionPopover={() => setIfConditionPopoverStepId(null)}
+                      onUpdateConfig={(cfg) => {
+                        setIfConfigByStepId((prev) => ({ ...prev, [item.id]: cfg }));
+                        setSteps((prev) =>
+                          prev.map((s) =>
+                            s.id === item.id ? { ...s, title: syncIfStepTitle(cfg, s.title) } : s
+                          )
+                        );
+                      }}
+                      onSelectStep={() =>
+                        setActiveStepByCase((prev) => ({ ...prev, [caseId]: item.id }))
+                      }
+                      onCopyStep={() => copyStep(caseId, item.id)}
+                      onDeleteStep={() => confirmDeleteStep(caseId, item.id)}
+                      onAddChildStep={(type) =>
+                        addStepAt(caseId, type, undefined, { parentStepId: item.id })
+                      }
+                      onSelectChildStep={(childId) =>
+                        setActiveStepByCase((prev) => ({ ...prev, [caseId]: childId }))
+                      }
+                      onCopyChildStep={(childId) => copyStep(caseId, childId)}
+                      onDeleteChildStep={(childId) => confirmDeleteStep(caseId, childId)}
+                      onOpenDbStepCreate={(afterChildId) =>
+                        openDbStepCreate(caseId, afterChildId, item.id)
+                      }
+                    />
+                  );
+                }
+                return (
+                <div
+                  key={item.id}
                   className="case-step-row"
                   style={{
                     cursor:
@@ -2625,32 +3218,63 @@ export function CaseManagement() {
                       />
                     </Dropdown>
                   </div>
-                </List.Item>
-              )}
-            />
-            <Dropdown
-              trigger={['hover', 'click']}
-              menu={{
-                items: STEP_TYPES.map((t) => ({ key: t, label: t })),
-                onClick: ({ key }) => {
-                  const chosen = String(key) as StepType;
-                  if (chosen === '数据库操作') {
-                    openDbStepCreate(caseId);
-                  } else {
-                    addStepAt(caseId, chosen);
-                  }
-                },
+                </div>
+                );
+              })}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                marginTop: 8,
+                alignItems: 'center',
+                flexWrap: 'nowrap',
               }}
             >
-              <Button type="dashed" block size="small" style={{ marginTop: 8 }}>
-                添加步骤 <DownOutlined />
+              <Dropdown
+                trigger={['hover', 'click']}
+                menu={{
+                  items: STEP_TYPES.map((t) => ({ key: t, label: t })),
+                  onClick: ({ key }) => {
+                    const chosen = String(key) as StepType;
+                    if (chosen === '数据库操作') {
+                      openDbStepCreate(caseId);
+                    } else {
+                      addStepAt(caseId, chosen);
+                    }
+                  },
+                }}
+              >
+                <Button type="primary" size="small" style={{ flex: 1, minWidth: 0 }}>
+                  添加步骤 <DownOutlined />
+                </Button>
+              </Dropdown>
+              <Button size="small" style={{ flexShrink: 0 }} onClick={() => copyStepToClipboard(caseId)}>
+                复制步骤
               </Button>
-            </Dropdown>
+              <Button
+                size="small"
+                style={{ flexShrink: 0 }}
+                disabled={!copiedStepClipboard}
+                onClick={() => pasteStepFromClipboard(caseId)}
+              >
+                粘贴步骤
+              </Button>
+            </div>
           </Card>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整步骤栏与详情栏宽度"
+            className="case-detail-step-splitter"
+            onMouseDown={() => setIsStepPaneResizing(true)}
+          >
+            <HolderOutlined />
+          </div>
           <Card
             size="small"
             title={step ? `步骤 ${step.order}` : '步骤详情'}
-            style={{ height: '100%' }}
+            style={{ flex: 1, minWidth: 0, height: '100%' }}
             styles={{ body: { height: '100%', overflow: 'auto' } }}
           >
             {step ? (
@@ -3388,10 +4012,9 @@ export function CaseManagement() {
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 120px 1fr 140px 80px 1fr 30px',
-                            gap: 8,
-                            alignItems: 'center',
-                            marginBottom: 8,
+                            gridTemplateColumns: ASSERT_API_GRID_COLUMNS,
+                            ...assertRowGridBaseStyle,
+                            marginBottom: 6,
                             color: '#262626',
                             fontWeight: 500,
                           }}
@@ -3400,8 +4023,12 @@ export function CaseManagement() {
                           <span>提取来源:</span>
                           <span>断言对象:</span>
                           <span>断言逻辑:</span>
-                          <span>取反:</span>
+                          <span style={assertCheckboxHeaderStyle}>取反</span>
                           <span>预期结果:</span>
+                          <AssertStopOnFailureHeader
+                            rows={getAssertRows(step.id)}
+                            onToggleAll={(v) => setAllAssertStopOnFailure(step.id, v)}
+                          />
                           <span />
                         </div>
                         {getAssertRows(step.id).map((row) => (
@@ -3409,10 +4036,9 @@ export function CaseManagement() {
                             key={row.id}
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: '1fr 120px 1fr 140px 80px 1fr 30px',
-                              gap: 8,
-                              alignItems: 'center',
-                              marginBottom: 8,
+                              gridTemplateColumns: ASSERT_API_GRID_COLUMNS,
+                              ...assertRowGridBaseStyle,
+                              marginBottom: 6,
                             }}
                           >
                             <Input
@@ -3463,17 +4089,23 @@ export function CaseManagement() {
                                 '长度等于',
                               ].map((x) => ({ label: x, value: x }))}
                             />
-                            <Checkbox
-                              checked={row.negate}
-                              onChange={(e) => updateAssertRow(step.id, row.id, { negate: e.target.checked })}
-                            >
-                              取反
-                            </Checkbox>
+                            <div style={assertCheckboxCellStyle}>
+                              <Checkbox
+                                checked={row.negate}
+                                onChange={(e) => updateAssertRow(step.id, row.id, { negate: e.target.checked })}
+                              />
+                            </div>
                             <Input
                               placeholder="预期结果"
                               value={row.expected}
                               onChange={(e) => updateAssertRow(step.id, row.id, { expected: e.target.value })}
                             />
+                            <div style={assertCheckboxCellStyle}>
+                              <Checkbox
+                                checked={row.stopOnFailure ?? true}
+                                onChange={(e) => updateAssertRow(step.id, row.id, { stopOnFailure: e.target.checked })}
+                              />
+                            </div>
                             <Button type="text" danger onClick={() => confirmDeleteAssertRow(step.id, row.id)}>
                               ×
                             </Button>
@@ -3646,10 +4278,9 @@ export function CaseManagement() {
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 110px 1fr 120px 80px 1fr 30px',
-                            gap: 8,
-                            alignItems: 'center',
-                            marginBottom: 8,
+                            gridTemplateColumns: ASSERT_FN_DB_GRID_COLUMNS,
+                            ...assertRowGridBaseStyle,
+                            marginBottom: 6,
                             color: '#262626',
                             fontWeight: 500,
                           }}
@@ -3658,8 +4289,12 @@ export function CaseManagement() {
                           <span>提取来源:</span>
                           <span>断言对象:</span>
                           <span>断言逻辑:</span>
-                          <span>取反:</span>
+                          <span style={assertCheckboxHeaderStyle}>取反</span>
                           <span>预期结果:</span>
+                          <AssertStopOnFailureHeader
+                            rows={getFunctionAssertRows(step.id)}
+                            onToggleAll={(v) => setAllFunctionAssertStopOnFailure(step.id, v)}
+                          />
                           <span />
                         </div>
                         {getFunctionAssertRows(step.id).map((row) => (
@@ -3667,10 +4302,9 @@ export function CaseManagement() {
                             key={row.id}
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: '1fr 110px 1fr 120px 80px 1fr 30px',
-                              gap: 8,
-                              alignItems: 'center',
-                              marginBottom: 8,
+                              gridTemplateColumns: ASSERT_FN_DB_GRID_COLUMNS,
+                              ...assertRowGridBaseStyle,
+                              marginBottom: 6,
                             }}
                           >
                             <Input
@@ -3713,17 +4347,25 @@ export function CaseManagement() {
                                 '长度等于',
                               ].map((x) => ({ label: x, value: x }))}
                             />
-                            <Checkbox
-                              checked={row.negate}
-                              onChange={(e) => updateFunctionAssertRow(step.id, row.id, { negate: e.target.checked })}
-                            >
-                              取反
-                            </Checkbox>
+                            <div style={assertCheckboxCellStyle}>
+                              <Checkbox
+                                checked={row.negate}
+                                onChange={(e) => updateFunctionAssertRow(step.id, row.id, { negate: e.target.checked })}
+                              />
+                            </div>
                             <Input
                               placeholder="请输入"
                               value={row.expected}
                               onChange={(e) => updateFunctionAssertRow(step.id, row.id, { expected: e.target.value })}
                             />
+                            <div style={assertCheckboxCellStyle}>
+                              <Checkbox
+                                checked={row.stopOnFailure ?? true}
+                                onChange={(e) =>
+                                  updateFunctionAssertRow(step.id, row.id, { stopOnFailure: e.target.checked })
+                                }
+                              />
+                            </div>
                             <Button type="text" danger onClick={() => confirmDeleteFunctionAssertRow(step.id, row.id)}>
                               ×
                             </Button>
@@ -3851,10 +4493,9 @@ export function CaseManagement() {
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr 110px 1fr 120px 80px 1fr 30px',
-                            gap: 8,
-                            alignItems: 'center',
-                            marginBottom: 8,
+                            gridTemplateColumns: ASSERT_FN_DB_GRID_COLUMNS,
+                            ...assertRowGridBaseStyle,
+                            marginBottom: 6,
                             color: '#262626',
                             fontWeight: 500,
                           }}
@@ -3863,8 +4504,12 @@ export function CaseManagement() {
                           <span>提取来源:</span>
                           <span>断言对象:</span>
                           <span>断言逻辑:</span>
-                          <span>取反:</span>
+                          <span style={assertCheckboxHeaderStyle}>取反</span>
                           <span>预期结果:</span>
+                          <AssertStopOnFailureHeader
+                            rows={getDbAssertRows(step.id)}
+                            onToggleAll={(v) => setAllDbAssertStopOnFailure(step.id, v)}
+                          />
                           <span />
                         </div>
                         {getDbAssertRows(step.id).map((row) => (
@@ -3872,10 +4517,9 @@ export function CaseManagement() {
                             key={row.id}
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: '1fr 110px 1fr 120px 80px 1fr 30px',
-                              gap: 8,
-                              alignItems: 'center',
-                              marginBottom: 8,
+                              gridTemplateColumns: ASSERT_FN_DB_GRID_COLUMNS,
+                              ...assertRowGridBaseStyle,
+                              marginBottom: 6,
                             }}
                           >
                             <Input
@@ -3918,17 +4562,23 @@ export function CaseManagement() {
                                 '长度等于',
                               ].map((x) => ({ label: x, value: x }))}
                             />
-                            <Checkbox
-                              checked={row.negate}
-                              onChange={(e) => updateDbAssertRow(step.id, row.id, { negate: e.target.checked })}
-                            >
-                              取反
-                            </Checkbox>
+                            <div style={assertCheckboxCellStyle}>
+                              <Checkbox
+                                checked={row.negate}
+                                onChange={(e) => updateDbAssertRow(step.id, row.id, { negate: e.target.checked })}
+                              />
+                            </div>
                             <Input
                               placeholder="请输入"
                               value={row.expected}
                               onChange={(e) => updateDbAssertRow(step.id, row.id, { expected: e.target.value })}
                             />
+                            <div style={assertCheckboxCellStyle}>
+                              <Checkbox
+                                checked={row.stopOnFailure ?? true}
+                                onChange={(e) => updateDbAssertRow(step.id, row.id, { stopOnFailure: e.target.checked })}
+                              />
+                            </div>
                             <Button type="text" danger onClick={() => confirmDeleteDbAssertRow(step.id, row.id)}>
                               ×
                             </Button>
@@ -3939,6 +4589,19 @@ export function CaseManagement() {
                         </Button>
                       </div>
                     ) : null}
+                  </div>
+                ) : stepType === 'if判断' ? (
+                  <div
+                    style={{
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 6,
+                      padding: 16,
+                      background: '#fafafa',
+                    }}
+                  >
+                    <Text type="secondary">
+                      在左侧步骤栏点击 If 判断 行首，配置条件分支（表达式 / 运算符 / 预期值）；在 If 块内添加子步骤，类型与「添加步骤」一致。
+                    </Text>
                   </div>
                 ) : stepType === '等待' ? (
                   <div
@@ -4256,6 +4919,15 @@ export function CaseManagement() {
             opacity: 1;
             pointer-events: auto;
           }
+          .case-if-step-header .case-if-step-header-actions {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .15s ease;
+          }
+          .case-if-step-header:hover .case-if-step-header-actions {
+            opacity: 1;
+            pointer-events: auto;
+          }
           .case-detail-tabs,
           .case-detail-tabs .ant-tabs-content,
           .case-detail-tabs .ant-tabs-tabpane {
@@ -4289,9 +4961,21 @@ export function CaseManagement() {
             min-height: 0;
           }
           .case-detail-main-grid {
-            display: grid;
+            display: flex;
             flex: 1;
             min-height: 0;
+          }
+          .case-detail-step-splitter {
+            flex: 0 0 10px;
+            cursor: col-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #bfbfbf;
+            user-select: none;
+          }
+          .case-detail-step-splitter:hover {
+            color: #1677ff;
           }
         `}
       </style>
@@ -4303,16 +4987,29 @@ export function CaseManagement() {
         }
         size="small"
         styles={{ body: { padding: 12, minHeight: 560 } }}
-        style={{ flex: `0 0 ${leftPaneWidth}%`, minWidth: 340 }}
+        style={{
+          flex: `0 0 ${treePaneWidthPx}px`,
+          width: treePaneWidthPx,
+          minWidth: TREE_PANE_MIN_WIDTH_PX,
+          maxWidth: '42%',
+        }}
       >
-        <div style={{ marginBottom: 12, display: 'flex', gap: 8, width: 'fit-content' }}>
+        <div
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            width: TREE_SEARCH_INPUT_WIDTH_PX + 8 + 32,
+          }}
+        >
           <Input
             allowClear
             placeholder="搜索目录/用例"
             value={treeKeyword}
             onChange={(e) => setTreeKeyword(e.target.value)}
             prefix={<SearchOutlined />}
-            style={{ width: 280, maxWidth: 280, minWidth: 280 }}
+            style={{ width: TREE_SEARCH_INPUT_WIDTH_PX, flex: '0 0 auto' }}
           />
           <Dropdown
             trigger={['click']}

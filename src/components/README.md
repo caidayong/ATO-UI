@@ -6,6 +6,6 @@
 
 | 组件 | 说明 |
 |------|------|
-| `DynamicValueInput` | 在「变量值 / 参数值 / 配置值」等输入框右侧提供「插入动态值」（全局变量占位 `{{name}}`、数据生成表达式）；**统一改此文件即可全站入口行为一致**。 |
+| `DynamicValueInput` / `DynamicValueTextArea` | 在输入框旁提供「插入动态值」荧光棒（`HighlightOutlined`）；`DynamicValueTextArea` 默认 hover 显示入口；**统一改 `DynamicValueInput.tsx` 即可全站行为一致**。 |
 
 用法：`import { DynamicValueInput } from '@/components/DynamicValueInput'`，按需传入 `globalVariableOptions`（全局变量名列）。

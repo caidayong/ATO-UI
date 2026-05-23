@@ -1,8 +1,9 @@
 /**
- * 通用：变量值 / 参数值 / 配置值等输入框右侧「插入动态值」入口。
+ * 通用：变量值 / 参数值 / 配置值等输入框右侧「插入动态值」（荧光棒）入口。
  * 交互统一维护在本文件，其它页面按需引入即可同步升级。
  */
-import { useMemo, useState, type ChangeEvent } from 'react';
+import './dynamic-value-field.css';
+import { useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   Button,
   Card,
@@ -16,6 +17,7 @@ import {
   message,
 } from 'antd';
 import type { InputProps } from 'antd';
+import type { TextAreaProps } from 'antd/es/input';
 import {
   ArrowLeftOutlined,
   CloseOutlined,
@@ -55,17 +57,18 @@ const DATA_GEN_PRESETS: {
   },
 ];
 
-export type DynamicValueInputProps = Omit<InputProps, 'suffix' | 'addonAfter'> & {
-  /** 「插入全局变量」可选名称；为空时使用内置示例名便于联调 */
+export type DynamicValueInsertOptions = {
+  value?: string | number | readonly string[];
+  onChange?: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   globalVariableOptions?: string[];
 };
 
-export function DynamicValueInput({
-  globalVariableOptions,
+/** 荧光棒触发器 + 插入动态值弹窗（与 DynamicValueInput 共用） */
+export function useDynamicValueInsert({
   value,
   onChange,
-  ...rest
-}: DynamicValueInputProps) {
+  globalVariableOptions,
+}: DynamicValueInsertOptions) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('menu');
   const [search, setSearch] = useState('');
@@ -97,6 +100,11 @@ export function DynamicValueInput({
     resetModalState();
   };
 
+  const openInsert = () => {
+    resetModalState();
+    setOpen(true);
+  };
+
   const append = (inserted: string) => {
     const cur = String(value ?? '');
     const next = cur + inserted;
@@ -108,21 +116,21 @@ export function DynamicValueInput({
   const genPreset = genKind ? DATA_GEN_PRESETS.find((o) => o.value === genKind) : undefined;
   const previewValue = genPreset && previewTick >= 0 ? genPreset.preview() : '';
 
-  const suffix = (
-    <Tooltip title="插入动态值">
-      <Button
-        type="text"
-        size="small"
-        icon={<HighlightOutlined style={{ color: '#faad14' }} />}
-        onClick={(e) => {
-          e.stopPropagation();
-          resetModalState();
-          setOpen(true);
-        }}
-        aria-label="插入动态值"
-        style={{ marginInlineEnd: -6 }}
-      />
-    </Tooltip>
+  const glowTrigger = (
+    <div className="dynamic-value-glow-trigger">
+      <Tooltip title="插入动态值">
+        <Button
+          type="text"
+          size="small"
+          icon={<HighlightOutlined style={{ color: '#faad14' }} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            openInsert();
+          }}
+          aria-label="插入动态值"
+        />
+      </Tooltip>
+    </div>
   );
 
   const menuTitle = (
@@ -151,189 +159,302 @@ export function DynamicValueInput({
         borderBottom: '1px solid #f0f0f0',
       }}
     >
-      <Button
-        type="text"
-        icon={<ArrowLeftOutlined />}
-        onClick={onBack}
-        aria-label="返回"
-      />
+      <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} aria-label="返回" />
       <span style={{ flex: 1, textAlign: 'center', fontWeight: 600 }}>{label}</span>
       <Button type="text" icon={<CloseOutlined />} onClick={closeAll} aria-label="关闭" />
     </div>
   );
 
+  const insertModal = (
+    <Modal
+      open={open}
+      onCancel={closeAll}
+      footer={null}
+      width={440}
+      closable={false}
+      destroyOnClose
+      styles={{ body: { paddingTop: 12 } }}
+      title={
+        step === 'menu'
+          ? menuTitle
+          : step === 'global'
+            ? subTitle('插入全局变量', () => {
+                setStep('menu');
+                setPickedGlobal(null);
+                setSearch('');
+              })
+            : subTitle('数据生成', () => {
+                setStep('menu');
+                setGenKind(null);
+              })
+      }
+    >
+      {step === 'menu' ? (
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Card
+            size="small"
+            hoverable
+            styles={{ body: { padding: 14 } }}
+            onClick={() => {
+              setStep('global');
+              setPickedGlobal(null);
+              setSearch('');
+            }}
+          >
+            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+              <Space size={12}>
+                <DeploymentUnitOutlined style={{ fontSize: 22, color: '#eb2f96' }} />
+                <div>
+                  <Typography.Text strong>全局变量</Typography.Text>
+                  <div>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      插入全局变量
+                    </Typography.Text>
+                  </div>
+                </div>
+              </Space>
+              <RightOutlined style={{ color: '#bfbfbf' }} />
+            </Space>
+          </Card>
+          <Card
+            size="small"
+            hoverable
+            styles={{ body: { padding: 14 } }}
+            onClick={() => {
+              setStep('datagen');
+              setGenKind(null);
+            }}
+          >
+            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+              <Space size={12}>
+                <FunctionOutlined style={{ fontSize: 22, color: '#13c2c2' }} />
+                <div>
+                  <Typography.Text strong>数据生成</Typography.Text>
+                  <div>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      生成特定规则/随机数据
+                    </Typography.Text>
+                  </div>
+                </div>
+              </Space>
+              <RightOutlined style={{ color: '#bfbfbf' }} />
+            </Space>
+          </Card>
+        </Space>
+      ) : null}
+
+      {step === 'global' ? (
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input
+            allowClear
+            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+            placeholder="查询"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 8 }}>
+            <List
+              size="small"
+              dataSource={filteredVars}
+              locale={{ emptyText: '无匹配变量' }}
+              renderItem={(name) => (
+                <List.Item
+                  key={name}
+                  onClick={() => setPickedGlobal(name)}
+                  style={{
+                    cursor: 'pointer',
+                    background: pickedGlobal === name ? '#e6f4ff' : undefined,
+                  }}
+                >
+                  <Typography.Text code>{name}</Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+          <Button
+            type="primary"
+            block
+            disabled={!pickedGlobal}
+            onClick={() => pickedGlobal && append(`{{${pickedGlobal}}}`)}
+          >
+            插入
+          </Button>
+        </Space>
+      ) : null}
+
+      {step === 'datagen' ? (
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Select
+            placeholder="选择生成规则"
+            allowClear
+            style={{ width: '100%' }}
+            value={genKind}
+            onChange={(v) => {
+              setGenKind(v ?? null);
+              setPreviewTick((t) => t + 1);
+            }}
+            options={DATA_GEN_PRESETS.map((p) => ({ label: p.label, value: p.value }))}
+          />
+          <div
+            style={{
+              background: '#e6f4ff',
+              borderRadius: 8,
+              padding: 12,
+              position: 'relative',
+            }}
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={<ReloadOutlined />}
+              aria-label="刷新预览"
+              onClick={() => setPreviewTick((t) => t + 1)}
+              style={{ position: 'absolute', right: 8, top: 8 }}
+            />
+            <Space direction="vertical" size={6} style={{ paddingRight: 28 }}>
+              <div>
+                <Typography.Text type="secondary">表达式：</Typography.Text>
+                <Typography.Text code style={{ marginLeft: 8 }}>
+                  {genPreset?.expr ?? '—'}
+                </Typography.Text>
+              </div>
+              <div>
+                <Typography.Text type="secondary">预览：</Typography.Text>
+                <Typography.Text style={{ marginLeft: 8 }}>{previewValue || '—'}</Typography.Text>
+              </div>
+            </Space>
+          </div>
+          <Button type="primary" block disabled={!genPreset} onClick={() => genPreset && append(genPreset.expr)}>
+            插入
+          </Button>
+        </Space>
+      ) : null}
+    </Modal>
+  );
+
+  return { glowTrigger, insertModal, openInsert };
+}
+
+function DynamicValueFieldShell({
+  hideGlowUntilHover,
+  children,
+  glowTrigger,
+  insertModal,
+}: {
+  hideGlowUntilHover?: boolean;
+  children: ReactNode;
+  glowTrigger: ReactNode;
+  insertModal: ReactNode;
+}) {
+  if (hideGlowUntilHover) {
+    return (
+      <div className="dynamic-value-hover-wrap">
+        {children}
+        {glowTrigger}
+        {insertModal}
+      </div>
+    );
+  }
+  return (
+    <>
+      {children}
+      {glowTrigger}
+      {insertModal}
+    </>
+  );
+}
+
+export type DynamicValueInputProps = Omit<InputProps, 'suffix' | 'addonAfter'> & {
+  globalVariableOptions?: string[];
+  /** 为 true 时荧光棒仅在 hover / focus 时显示 */
+  hideGlowUntilHover?: boolean;
+};
+
+export function DynamicValueInput({
+  globalVariableOptions,
+  hideGlowUntilHover = false,
+  value,
+  onChange,
+  ...rest
+}: DynamicValueInputProps) {
+  const { glowTrigger, insertModal, openInsert } = useDynamicValueInsert({
+    value: value == null ? undefined : String(value),
+    onChange: onChange as DynamicValueInsertOptions['onChange'],
+    globalVariableOptions,
+  });
+
+  if (hideGlowUntilHover) {
+    return (
+      <DynamicValueFieldShell hideGlowUntilHover glowTrigger={glowTrigger} insertModal={insertModal}>
+        <Input
+          {...rest}
+          value={value}
+          onChange={onChange}
+          style={{ width: '100%', paddingRight: 36, ...(rest.style ?? {}) }}
+        />
+      </DynamicValueFieldShell>
+    );
+  }
+
+  const suffix = (
+    <Tooltip title="插入动态值">
+      <Button
+        type="text"
+        size="small"
+        icon={<HighlightOutlined style={{ color: '#faad14' }} />}
+        onClick={(e) => {
+          e.stopPropagation();
+          openInsert();
+        }}
+        aria-label="插入动态值"
+        style={{ marginInlineEnd: -6 }}
+      />
+    </Tooltip>
+  );
+
   return (
     <>
       <Input {...rest} value={value} onChange={onChange} suffix={suffix} />
-      <Modal
-        open={open}
-        onCancel={closeAll}
-        footer={null}
-        width={440}
-        closable={false}
-        destroyOnClose
-        styles={{ body: { paddingTop: 12 } }}
-        title={
-          step === 'menu'
-            ? menuTitle
-            : step === 'global'
-              ? subTitle('插入全局变量', () => {
-                  setStep('menu');
-                  setPickedGlobal(null);
-                  setSearch('');
-                })
-              : subTitle('数据生成', () => {
-                  setStep('menu');
-                  setGenKind(null);
-                })
-        }
-      >
-        {step === 'menu' ? (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Card
-              size="small"
-              hoverable
-              styles={{ body: { padding: 14 } }}
-              onClick={() => {
-                setStep('global');
-                setPickedGlobal(null);
-                setSearch('');
-              }}
-            >
-              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Space size={12}>
-                  <DeploymentUnitOutlined style={{ fontSize: 22, color: '#eb2f96' }} />
-                  <div>
-                    <Typography.Text strong>全局变量</Typography.Text>
-                    <div>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        插入全局变量
-                      </Typography.Text>
-                    </div>
-                  </div>
-                </Space>
-                <RightOutlined style={{ color: '#bfbfbf' }} />
-              </Space>
-            </Card>
-            <Card
-              size="small"
-              hoverable
-              styles={{ body: { padding: 14 } }}
-              onClick={() => {
-                setStep('datagen');
-                setGenKind(null);
-              }}
-            >
-              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Space size={12}>
-                  <FunctionOutlined style={{ fontSize: 22, color: '#13c2c2' }} />
-                  <div>
-                    <Typography.Text strong>数据生成</Typography.Text>
-                    <div>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        生成特定规则/随机数据
-                      </Typography.Text>
-                    </div>
-                  </div>
-                </Space>
-                <RightOutlined style={{ color: '#bfbfbf' }} />
-              </Space>
-            </Card>
-          </Space>
-        ) : null}
-
-        {step === 'global' ? (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Input
-              allowClear
-              prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-              placeholder="查询"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 8 }}>
-              <List
-                size="small"
-                dataSource={filteredVars}
-                locale={{ emptyText: '无匹配变量' }}
-                renderItem={(name) => (
-                  <List.Item
-                    key={name}
-                    onClick={() => setPickedGlobal(name)}
-                    style={{
-                      cursor: 'pointer',
-                      background: pickedGlobal === name ? '#e6f4ff' : undefined,
-                    }}
-                  >
-                    <Typography.Text code>{name}</Typography.Text>
-                  </List.Item>
-                )}
-              />
-            </div>
-            <Button
-              type="primary"
-              block
-              disabled={!pickedGlobal}
-              onClick={() => pickedGlobal && append(`{{${pickedGlobal}}}`)}
-            >
-              插入
-            </Button>
-          </Space>
-        ) : null}
-
-        {step === 'datagen' ? (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Select
-              placeholder="选择生成规则"
-              allowClear
-              style={{ width: '100%' }}
-              value={genKind}
-              onChange={(v) => {
-                setGenKind(v ?? null);
-                setPreviewTick((t) => t + 1);
-              }}
-              options={DATA_GEN_PRESETS.map((p) => ({ label: p.label, value: p.value }))}
-            />
-            <div
-              style={{
-                background: '#e6f4ff',
-                borderRadius: 8,
-                padding: 12,
-                position: 'relative',
-              }}
-            >
-              <Button
-                type="text"
-                size="small"
-                icon={<ReloadOutlined />}
-                aria-label="刷新预览"
-                onClick={() => setPreviewTick((t) => t + 1)}
-                style={{ position: 'absolute', right: 8, top: 8 }}
-              />
-              <Space direction="vertical" size={6} style={{ paddingRight: 28 }}>
-                <div>
-                  <Typography.Text type="secondary">表达式：</Typography.Text>
-                  <Typography.Text code style={{ marginLeft: 8 }}>
-                    {genPreset?.expr ?? '—'}
-                  </Typography.Text>
-                </div>
-                <div>
-                  <Typography.Text type="secondary">预览：</Typography.Text>
-                  <Typography.Text style={{ marginLeft: 8 }}>{previewValue || '—'}</Typography.Text>
-                </div>
-              </Space>
-            </div>
-            <Button
-              type="primary"
-              block
-              disabled={!genPreset}
-              onClick={() => genPreset && append(genPreset.expr)}
-            >
-              插入
-            </Button>
-          </Space>
-        ) : null}
-      </Modal>
+      {insertModal}
     </>
+  );
+}
+
+export type DynamicValueTextAreaProps = Omit<TextAreaProps, 'value' | 'onChange'> & {
+  value?: string;
+  onChange?: (e: ChangeEvent<HTMLTextAreaElement>) => void;
+  globalVariableOptions?: string[];
+  /** 默认 true：荧光棒 hover / focus 时显示 */
+  hideGlowUntilHover?: boolean;
+};
+
+export function DynamicValueTextArea({
+  globalVariableOptions,
+  hideGlowUntilHover = true,
+  value,
+  onChange,
+  rows = 2,
+  ...rest
+}: DynamicValueTextAreaProps) {
+  const { glowTrigger, insertModal } = useDynamicValueInsert({
+    value,
+    onChange: onChange as DynamicValueInsertOptions['onChange'],
+    globalVariableOptions,
+  });
+
+  return (
+    <DynamicValueFieldShell
+      hideGlowUntilHover={hideGlowUntilHover}
+      glowTrigger={glowTrigger}
+      insertModal={insertModal}
+    >
+      <Input.TextArea
+        {...rest}
+        rows={rows}
+        value={value}
+        onChange={onChange}
+        style={{ width: '100%', paddingRight: 36, ...(rest.style ?? {}) }}
+      />
+    </DynamicValueFieldShell>
   );
 }

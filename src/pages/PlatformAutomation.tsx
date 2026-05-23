@@ -1936,8 +1936,8 @@ export function PlatformAutomation() {
             writeQuery({ tab, page: '1' });
           }}
           items={[
-            { key: 'test', label: '测试环境' },
-            { key: 'dev', label: '开发环境' },
+            { key: 'test', label: '测试任务' },
+            { key: 'dev', label: '开发任务' },
           ]}
         />
 

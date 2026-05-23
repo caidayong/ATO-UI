@@ -14,7 +14,8 @@
  *   - V1.0.6: 左侧树点击「接口场景（用例）」节点时，右侧展示 Postman 式场景调试详情（环境、完整 URL、 Params/Body/Headers 等、底部响应区占位）；
  *             `ApiInterfaceScenario` 支持场景级 path/query 参数表（缺省继承父接口）；Mock「查询环境列表」与原型示例对齐
  *   - V1.0.7: 场景 Params 表列宽均分；Path 区去掉「添加」；Query 表底行「添加」增行、操作列启用/禁用开关（默认开）；
- *             点击「发送」自动弹出底部响应抽屉，支持展开/收起
+ *             点击「发送」自动弹出底部响应抽屉，支持展开/收起；抽屉挂载于右侧详情区容器内，宽度与详情页一致；
+ *             右侧列表「接口名称」可点击，与左侧树选中接口一致进入「接口预览」详情
  */
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
@@ -688,7 +689,17 @@ function ApiScenarioCasePane({
     );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#fff' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        position: 'relative',
+        overflow: 'hidden',
+        background: '#fff',
+      }}
+    >
       {/* 顶部「文档」Tab：父接口 vs 当前场景 */}
       <Tabs
         activeKey={docTab}
@@ -735,18 +746,28 @@ function ApiScenarioCasePane({
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               接口用例 · 所属目录：{moduleName}
             </Typography.Text>
-            <Space size={8}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '6px 12px',
+                background: '#f5f5f5',
+                borderRadius: 8,
+                border: '1px solid #e8e8e8',
+              }}
+            >
+              <Typography.Text strong style={{ fontSize: 14, color: 'rgba(0,0,0,0.88)', whiteSpace: 'nowrap' }}>
                 环境
               </Typography.Text>
               <Select
                 value={envId}
                 onChange={onEnvChange}
-                style={{ width: 168 }}
-                size="small"
+                style={{ minWidth: 200 }}
+                size="middle"
                 options={environments.map((e) => ({ value: e.id, label: e.name }))}
               />
-            </Space>
+            </div>
           </div>
 
           <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
@@ -796,6 +817,8 @@ function ApiScenarioCasePane({
           </div>
 
           <Drawer
+            getContainer={false}
+            rootStyle={{ position: 'absolute' }}
             title={
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <Space wrap size={12}>
@@ -827,10 +850,11 @@ function ApiScenarioCasePane({
             placement="bottom"
             open={respDrawerOpen}
             onClose={() => setRespDrawerOpen(false)}
-            height={respDrawerExpanded ? '42vh' : 88}
+            height={respDrawerExpanded ? '45%' : 88}
             mask={false}
             destroyOnClose={false}
             styles={{
+              wrapper: { position: 'absolute', width: '100%' },
               body: { padding: 0, overflow: 'hidden' },
               header: { padding: '8px 16px' },
             }}
@@ -1357,6 +1381,17 @@ export function InterfaceManagement() {
   }, [projectCategories, contextMenuNode]);
 
   // === 事件处理 ===
+  /** 选中某个接口并进入详情（默认「接口预览」Tab），列表与左侧树共用 */
+  const handleSelectApi = useCallback((api: ApiDefinition) => {
+    const apiKey = `${API_TREE_PREFIX}${api.id}`;
+    setSelectedTreeKey(apiKey);
+    setSelectedCategoryId(api.categoryId);
+    setDetailTab('preview');
+    setExpandedKeys((prev) =>
+      Array.from(new Set([...prev, 'root', api.categoryId, apiKey]))
+    );
+  }, []);
+
   const handleTreeSelect = useCallback(
     (selectedKeys: React.Key[]) => {
       if (selectedKeys.length === 0) return;
@@ -1367,8 +1402,7 @@ export function InterfaceManagement() {
         const apiId = key.slice(API_TREE_PREFIX.length);
         const api = apis.find((a) => a.id === apiId);
         if (api) {
-          setSelectedCategoryId(api.categoryId);
-          setExpandedKeys((prev) => Array.from(new Set([...prev, key])));
+          handleSelectApi(api);
         }
         return;
       }
@@ -1385,7 +1419,7 @@ export function InterfaceManagement() {
 
       setSelectedCategoryId(key);
     },
-    [apis]
+    [apis, handleSelectApi]
   );
 
   const handleApiDetailSave = useCallback((patch: Partial<ApiDefinition>) => {
@@ -1588,8 +1622,15 @@ export function InterfaceManagement() {
         title: '接口名称',
         dataIndex: 'name',
         key: 'name',
-        render: (text: string) => (
-          <a style={{ color: '#1677ff' }}>{text}</a>
+        render: (text: string, record: ApiDefinition) => (
+          <Typography.Link
+            onClick={(e) => {
+              e.preventDefault();
+              handleSelectApi(record);
+            }}
+          >
+            {text}
+          </Typography.Link>
         ),
         ellipsis: true,
       },
@@ -1627,7 +1668,7 @@ export function InterfaceManagement() {
         },
       },
     ],
-    [categories]
+    [categories, handleSelectApi]
   );
 
   // === 渲染 ===
@@ -1797,13 +1838,25 @@ export function InterfaceManagement() {
                   <Tag color="blue">{currentCategory?.name || '—'}</Tag>
                   <span style={{ color: '#666' }}>(共{filteredApis.length}个接口)</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ color: '#666', fontSize: 12 }}>环境：</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '6px 12px',
+                    background: '#f5f5f5',
+                    borderRadius: 8,
+                    border: '1px solid #e8e8e8',
+                  }}
+                >
+                  <span style={{ color: 'rgba(0,0,0,0.88)', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    环境
+                  </span>
                   <Select
                     value={currentEnv}
                     onChange={setCurrentEnv}
-                    style={{ width: 140 }}
-                    size="small"
+                    style={{ minWidth: 180 }}
+                    size="middle"
                   >
                     {mockApiEnvironments.map((env) => (
                       <Option key={env.id} value={env.id}>

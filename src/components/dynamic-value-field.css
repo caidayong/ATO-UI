@@ -1,0 +1,20 @@
+.dynamic-value-hover-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.dynamic-value-hover-wrap .dynamic-value-glow-trigger {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.dynamic-value-hover-wrap:hover .dynamic-value-glow-trigger,
+.dynamic-value-hover-wrap:focus-within .dynamic-value-glow-trigger {
+  opacity: 1;
+  pointer-events: auto;
+}
