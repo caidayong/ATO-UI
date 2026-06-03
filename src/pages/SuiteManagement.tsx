@@ -1,13 +1,20 @@
 /**
  * @page 套件管理
- * @version V1.0.1-P5
- * @base docs/prd/V1.0.1-P5/ATO_V1.0.1-P5-页面需求与交互规格.md 第 3.1 节
+ * @version V1.0.1-P6
+ * @base docs/prd/V1.0.1-P5/ATO_V1.0.1-P5-页面需求与交互规格.md 第 3.1 节（P6 并行配置待 PRD 同步）
  * @changes
  *   - V1.0.1-P5: 列表/新建编辑/删除；用例范围与测试运行「执行范围」同构（无并行配置）；Mock `mockSuites`
  *   - V1.0.1-P5: 验收 — 新建按钮文案「新建测试套件」；弹窗内「所属模块」为 包含/不包含+模块 可多行（无行内标签）；「标签」为 等于/包含/不包含+标签值 可多行
  *   - V1.0.1-P5: 列表「用例范围」列两行展示（模块 / 标签条件），单行省略，悬停 Tooltip 展示全文
+ *   - V1.0.1-P6: 新建/编辑弹窗增加「并行配置」区块，组件与交互与测试运行「创建自测任务」同构（分组方式、串并行步骤、线程数；不含模版选择与另存为模版）
  */
 import { useMemo, useState, type CSSProperties } from 'react';
+import {
+  DEFAULT_PARALLEL_FORM_FIELDS,
+  ParallelRunConfigFormSection,
+  parallelConfigFromForm,
+  parallelConfigToFormFields,
+} from '@/components/ParallelRunConfigFormSection';
 import { useParams } from 'react-router-dom';
 import {
   Button,
@@ -27,7 +34,16 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DeleteOutlined, EditOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
-import type { CaseModule, SuiteModuleScopeRow, SuiteScopePersist, SuiteTagScopeRow, VersionSuite } from '@/types';
+import type {
+  CaseModule,
+  SuiteModuleScopeRow,
+  SuiteParallelConfigPersist,
+  SuiteScopePersist,
+  SuiteTagScopeRow,
+  VersionSuite,
+} from '@/types';
+import type { ParallelPlanStepForm } from '@/utils/parallelRunWizardShared';
+import { formatSuiteScopeSummaryLines } from '@/utils/suiteScopeDisplay';
 import { mockCaseModules, mockSuites, mockTestCases } from '@/mocks/data';
 
 const MODULE_ROOT_ALL = '__root_all__';
@@ -48,67 +64,30 @@ type SuiteFormValues = {
   description?: string;
   moduleRows: SuiteModuleScopeRow[];
   tagRows: SuiteTagScopeRow[];
+  parallelGroupType: 'module' | 'group';
+  parallelPlanSteps: ParallelPlanStepForm[];
+  parallelThreadCount: number;
 };
 
-function collectSubtreeModuleIds(moduleId: string, modules: CaseModule[]): Set<string> {
-  const set = new Set<string>([moduleId]);
-  const walk = (pid: string) => {
-    modules.filter((m) => m.parentId === pid).forEach((m) => {
-      set.add(m.id);
-      walk(m.id);
-    });
-  };
-  walk(moduleId);
-  return set;
-}
-
-function formatScopeSummaryLines(scope: SuiteScopePersist, modules: CaseModule[]): {
-  moduleLine: string;
-  tagLine: string;
-} {
-  const idToName = new Map(modules.map((m) => [m.id, m.name]));
-  const root = modules.find((m) => m.parentId === null);
-  const rootLabel = root?.name ?? '根目录';
-
-  const relModuleCn = (r: SuiteModuleScopeRow['relation']) => (r === 'exclude' ? '不包含' : '包含');
-  const relTagCn = (r: SuiteTagScopeRow['relation']) => {
-    if (r === 'eq') return '等于';
-    if (r === 'exclude') return '不包含';
-    return '包含';
-  };
-
-  const moduleParts = (scope.moduleRows ?? []).map((row) => {
-    const mids = row.moduleIds ?? [];
-    const names = mids.map((id) => (id === MODULE_ROOT_ALL ? rootLabel : idToName.get(id) ?? id));
-    const modLabel =
-      names.length === 0
-        ? '（未选模块）'
-        : mids.includes(MODULE_ROOT_ALL) || (root && mids.length > 0 && mids.every((id) => collectSubtreeModuleIds(root.id, modules).has(id)))
-          ? `${rootLabel}（全部子模块）`
-          : `「${names.join('、')}」`;
-    return `${relModuleCn(row.relation)}${modLabel}`;
-  });
-
-  const tagParts = (scope.tagRows ?? [])
-    .map((row) => {
-      const tags = (row.tags ?? []).filter(Boolean);
-      if (!tags.length) return null;
-      return `${relTagCn(row.relation)}「${tags.join('、')}」`;
-    })
-    .filter(Boolean);
-
-  const moduleLine = moduleParts.length ? `模块：${moduleParts.join('；')}。` : '模块：未配置。';
-  const tagLine = tagParts.length ? `标签条件：${tagParts.join('；')}。` : '标签条件：无。';
-  return { moduleLine, tagLine };
-}
-
 function formatScopeSummary(scope: SuiteScopePersist, modules: CaseModule[]): string {
-  const { moduleLine, tagLine } = formatScopeSummaryLines(scope, modules);
+  const { moduleLine, tagLine } = formatSuiteScopeSummaryLines(scope, modules);
   return `${moduleLine}${tagLine}`;
 }
 
 function makeId(): string {
   return `suite-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+}
+
+function cloneParallel(par?: SuiteParallelConfigPersist): SuiteParallelConfigPersist | undefined {
+  if (!par?.parallelPlanSteps?.length) return undefined;
+  return {
+    parallelGroupType: par.parallelGroupType,
+    parallelPlanSteps: par.parallelPlanSteps.map((s) => ({
+      stepKind: s.stepKind,
+      selection: [...(s.selection ?? [])],
+    })),
+    parallelThreadCount: par.parallelThreadCount,
+  };
 }
 
 function cloneScope(sc?: SuiteScopePersist): SuiteScopePersist {
@@ -159,6 +138,7 @@ export function SuiteManagement() {
     mockSuites.map((s) => ({
       ...s,
       scope: s.scope ? cloneScope(s.scope) : undefined,
+      parallel: cloneParallel(s.parallel),
     }))
   );
   const [keyword, setKeyword] = useState('');
@@ -179,6 +159,7 @@ export function SuiteManagement() {
       description: '',
       moduleRows: [{ relation: 'include', moduleIds: [] }],
       tagRows: [{ relation: 'eq', tags: [] }],
+      ...DEFAULT_PARALLEL_FORM_FIELDS,
     });
     setModalOpen(true);
   };
@@ -191,6 +172,7 @@ export function SuiteManagement() {
       description: row.description,
       moduleRows: sc.moduleRows,
       tagRows: sc.tagRows?.length ? sc.tagRows : [{ relation: 'eq', tags: [] }],
+      ...parallelConfigToFormFields(row.parallel),
     });
     setModalOpen(true);
   };
@@ -208,6 +190,7 @@ export function SuiteManagement() {
         tagRows: tagRowsClean.length ? tagRowsClean : [],
       };
       const scopeSummary = formatScopeSummary(scope, modules);
+      const parallel = parallelConfigFromForm(v);
       const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
       if (editing) {
         setRows((prev) =>
@@ -219,6 +202,7 @@ export function SuiteManagement() {
                   description: v.description,
                   scope,
                   scopeSummary,
+                  parallel,
                 }
               : r
           )
@@ -232,6 +216,7 @@ export function SuiteManagement() {
             description: v.description,
             scope,
             scopeSummary,
+            parallel,
             createdAt: now,
             createdBy: '当前用户（Mock）',
           },
@@ -315,7 +300,7 @@ export function SuiteManagement() {
         open={modalOpen}
         onOk={submit}
         onCancel={() => setModalOpen(false)}
-        width={720}
+        width={800}
         destroyOnClose
         okText="确定"
         cancelText="取消"
@@ -333,6 +318,9 @@ export function SuiteManagement() {
               marginBottom: 16,
             }}
           >
+            <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
+              用例范围
+            </Typography.Text>
             <Form.Item label="所属模块" required>
               <Form.List name="moduleRows">
                 {(fields, { add, remove }) => (
@@ -447,6 +435,7 @@ export function SuiteManagement() {
               </Form.List>
             </Form.Item>
           </div>
+          <ParallelRunConfigFormSection versionModules={modules} />
           <Form.Item name="description" label="套件说明">
             <Input.TextArea rows={3} placeholder="可选" />
           </Form.Item>
@@ -459,7 +448,7 @@ export function SuiteManagement() {
 function ScopeSummaryCell({ record, modules }: { record: VersionSuite; modules: CaseModule[] }) {
   const { moduleLine, tagLine, tooltipTitle } = useMemo(() => {
     if (record.scope) {
-      const lines = formatScopeSummaryLines(record.scope, modules);
+      const lines = formatSuiteScopeSummaryLines(record.scope, modules);
       return {
         moduleLine: lines.moduleLine,
         tagLine: lines.tagLine,

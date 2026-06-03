@@ -1133,6 +1133,14 @@ export const mockSuites: VersionSuite[] = [
       ],
       tagRows: [{ relation: 'include', tags: ['smoke', 'P0'] }],
     },
+    parallel: {
+      parallelGroupType: 'module',
+      parallelPlanSteps: [
+        { stepKind: 'serial', selection: ['mod-pay-order'] },
+        { stepKind: 'parallel', selection: ['mod-pay-refund', 'mod-pay-coupon'] },
+      ],
+      parallelThreadCount: 2,
+    },
   },
   {
     id: 'suite-download',

@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ROUTES } from '@/constants/routes';
 import { MainLayout } from '@/layouts/MainLayout';
 import { VersionDevLayout } from '@/layouts/VersionDevLayout';
 import { ProjectList } from '@/pages/ProjectList';
@@ -24,6 +23,10 @@ import { MarketDefectAnalysis } from '@/pages/MarketDefectAnalysis';
 import { MarketDefectReportPage } from '@/pages/MarketDefectReportPage';
 import { MarketDefectReportDetailPage } from '@/pages/MarketDefectReportDetailPage';
 import { InterfaceManagement } from '@/pages/InterfaceManagement';
+import { ToolsHub } from '@/pages/ToolsHub';
+import { ProjectReportsPage } from '@/pages/ProjectReportsPage';
+import { ProjectReportDetailPage } from '@/pages/ProjectReportDetailPage';
+import { ProjectReportStatisticsPage } from '@/pages/ProjectReportStatisticsPage';
 
 function VersionDevIndexRedirect() {
   const { search } = useLocation();
@@ -73,7 +76,10 @@ export function AppRoutes() {
         <Route path="ptsw/plans" element={<ProductionPlanList />} />
         <Route path="ptsw/plans/:planId" element={<ProductionPlanDetail />} />
         <Route path="ptsw/resume" element={<ResumeManagement />} />
-        <Route path="tools" element={<Navigate to={ROUTES.TOOLS_MARKET_DEFECTS} replace />} />
+        <Route path="tools" element={<ToolsHub />} />
+        <Route path="tools/project-reports" element={<ProjectReportsPage />} />
+        <Route path="tools/project-reports/statistics" element={<ProjectReportStatisticsPage />} />
+        <Route path="tools/project-reports/:reportConfigId" element={<ProjectReportDetailPage />} />
         <Route path="tools/market-defects" element={<MarketDefectAnalysis />} />
         <Route path="tools/market-defects/report" element={<MarketDefectReportPage />} />
         <Route path="tools/market-defects/reports/:reportId" element={<MarketDefectReportDetailPage />} />

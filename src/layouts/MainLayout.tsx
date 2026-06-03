@@ -57,6 +57,9 @@ function mainMenuSelectedKey(pathname: string): string {
     return ROUTES.PTSW_RESUME;
   }
   if (pathname === ROUTES.TOOLS || pathname.startsWith(`${ROUTES.TOOLS}/`)) {
+    if (pathname.startsWith(ROUTES.TOOLS_PROJECT_REPORTS)) {
+      return ROUTES.TOOLS_PROJECT_REPORTS;
+    }
     return ROUTES.TOOLS_MARKET_DEFECTS;
   }
   return pathname;
@@ -127,6 +130,10 @@ const menuItems: MenuItem[] = [
     label: '测试工具',
     children: [
       {
+        key: ROUTES.TOOLS_PROJECT_REPORTS,
+        label: <Link to={ROUTES.TOOLS_PROJECT_REPORTS}>项目日&周报</Link>,
+      },
+      {
         key: ROUTES.TOOLS_MARKET_DEFECTS,
         label: <Link to={ROUTES.TOOLS_MARKET_DEFECTS}>市场缺陷分析</Link>,
       },
@@ -166,6 +173,30 @@ function buildBreadcrumbItems(pathname: string): BreadcrumbProps['items'] {
     pathname.startsWith(`${ROUTES.AUTOMATION_API_MANAGEMENT}/`)
   ) {
     return [{ title: '自动化开发' }, { title: '接口管理' }];
+  }
+
+  if (pathname === ROUTES.TOOLS_PROJECT_REPORTS) {
+    return [{ title: '测试工具' }, { title: '项目日&周报' }];
+  }
+
+  if (pathname === ROUTES.TOOLS_PROJECT_REPORTS_STATISTICS) {
+    return [
+      { title: '测试工具' },
+      { title: <Link to={ROUTES.TOOLS_PROJECT_REPORTS}>项目日&周报</Link> },
+      { title: '数据统计' },
+    ];
+  }
+
+  if (/^\/tools\/project-reports\/[^/]+$/.test(pathname)) {
+    return [
+      { title: '测试工具' },
+      { title: <Link to={ROUTES.TOOLS_PROJECT_REPORTS}>项目日&周报</Link> },
+      { title: '日报详情' },
+    ];
+  }
+
+  if (pathname === ROUTES.TOOLS) {
+    return [{ title: '测试工具' }];
   }
 
   if (pathname === ROUTES.TOOLS_MARKET_DEFECTS) {

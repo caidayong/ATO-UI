@@ -269,6 +269,13 @@ export interface SuiteScopePersist {
   tagRows: SuiteTagScopeRow[];
 }
 
+/** 套件 — 并行配置持久化（与测试运行「创建自测任务」并行配置字段同构） */
+export interface SuiteParallelConfigPersist {
+  parallelGroupType: 'module' | 'group';
+  parallelPlanSteps: Array<{ stepKind: 'serial' | 'parallel'; selection: string[] }>;
+  parallelThreadCount: number;
+}
+
 /** 套件（V1.0.1-P5） */
 export interface VersionSuite {
   id: string;
@@ -278,6 +285,8 @@ export interface VersionSuite {
   createdAt: string;
   createdBy: string;
   scope?: SuiteScopePersist;
+  /** 套件绑定的并行执行计划（可选；测试运行选择套件时可回填） */
+  parallel?: SuiteParallelConfigPersist;
 }
 
 /** 市场缺陷列表行（V1.0.1-P5 列表字段对齐验收列） */

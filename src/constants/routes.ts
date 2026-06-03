@@ -22,6 +22,10 @@ export const ROUTES = {
   PTSW_RESUME: '/ptsw/resume',
   /** 测试工具 · 卡片入口（V1.0.1-P5） */
   TOOLS: '/tools',
+  /** 测试工具 / 项目日&周报（V1.0.1-P6） */
+  TOOLS_PROJECT_REPORTS: '/tools/project-reports',
+  /** 测试工具 / 项目日&周报 / 数据统计（V1.0.1-P6） */
+  TOOLS_PROJECT_REPORTS_STATISTICS: '/tools/project-reports/statistics',
   /** 测试工具 / 市场缺陷分析（V1.0.1-P5） */
   TOOLS_MARKET_DEFECTS: '/tools/market-defects',
   /** 测试工具 / 市场缺陷分析 / 报表（V1.0.1-P5） */
@@ -38,6 +42,11 @@ export const MARKET_DEFECTS_LIST_SNAPSHOT_STORAGE_KEY =
 /** 测试工具 / 市场缺陷分析 / 报告详情（V1.0.1-P5） */
 export function toolsMarketDefectReportDetailPath(reportId: string): string {
   return `${ROUTES.TOOLS_MARKET_DEFECTS}/reports/${encodeURIComponent(reportId)}`;
+}
+
+/** 测试工具 / 项目日&周报 / 日报详情（V1.0.1-P6） */
+export function projectReportDetailPath(reportConfigId: string): string {
+  return `${ROUTES.TOOLS_PROJECT_REPORTS}/${encodeURIComponent(reportConfigId)}`;
 }
 
 /** 项目详情（页面 3） */

@@ -3,17 +3,19 @@ import {
   Button,
   Checkbox,
   Dropdown,
+  Input,
   Popover,
   Select,
   Space,
   Tag,
   Typography,
 } from 'antd';
-import { DynamicValueTextArea } from '@/components/DynamicValueInput';
+import { DynamicValueInput } from '@/components/DynamicValueInput';
 import type { MenuProps } from 'antd';
 import {
   CaretDownOutlined,
   CaretRightOutlined,
+  CloseOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownOutlined,
@@ -23,38 +25,31 @@ import {
 import type { CaseStep, CaseStepType } from '@/types';
 import { CASE_STEP_TYPES } from '@/types';
 import {
-  IF_COMBINE_LOGIC_OPTIONS,
-  IF_COND_OP_OPTIONS,
-  createIfConditionClause,
-  getIfConditions,
-  type IfConditionClause,
-  type IfCombineLogic,
-  type IfStepConfig,
-  formatIfConditionSummary,
-  ifBranchKindLabel,
-  withIfConditions,
-} from '@/utils/caseIfStep';
+  FOR_BREAK_COMBINE_LOGIC_OPTIONS,
+  FOR_BREAK_OP_OPTIONS,
+  createForBreakCondition,
+  formatForStepSummary,
+  type ForBreakCombineLogic,
+  type ForBreakCondition,
+  type ForStepConfig,
+} from '@/utils/caseForStep';
 
 const { Text } = Typography;
 
 type StepType = CaseStepType;
 
-export type CaseIfStepBlockProps = {
-  caseId: string;
+export type CaseForStepBlockProps = {
   step: CaseStep;
   selected: boolean;
-  config: IfStepConfig;
+  config: ForStepConfig;
   childSteps: CaseStep[];
   stepTypeById: Record<string, StepType>;
   activeStepId: string;
-  conditionPopoverOpen: boolean;
-  canAddElseIf: boolean;
-  canAddElse: boolean;
+  configPopoverOpen: boolean;
   onToggleExpand: () => void;
-  onOpenConditionPopover: () => void;
-  onCloseConditionPopover: () => void;
-  onUpdateConfig: (config: IfStepConfig) => void;
-  onAddSiblingBranch: (kind: 'elseif' | 'else') => void;
+  onOpenConfigPopover: () => void;
+  onCloseConfigPopover: () => void;
+  onUpdateConfig: (config: ForStepConfig) => void;
   onSelectStep: () => void;
   onCopyStep: () => void;
   onDeleteStep: () => void;
@@ -71,27 +66,22 @@ export type CaseIfStepBlockProps = {
   onChildCopyCheckChange: (childId: string, checked: boolean) => void;
 };
 
-function buildIfStepAddMenuItems(): MenuProps['items'] {
+const FOR_CONFIG_POPOVER_WIDTH = 520;
+const FOR_BREAK_ROW_COLUMNS = 'minmax(0, 1fr) 108px minmax(0, 1fr) 28px';
+
+function buildForStepAddMenuItems(): MenuProps['items'] {
   const typeChildren = (scope: 'child' | 'sibling') =>
     CASE_STEP_TYPES.map((t) => ({
       key: `${scope}:${t}`,
       label: t,
     }));
   return [
-    {
-      key: 'add-child',
-      label: '添加子步骤',
-      children: typeChildren('child'),
-    },
-    {
-      key: 'add-sibling',
-      label: '添加同级步骤',
-      children: typeChildren('sibling'),
-    },
+    { key: 'add-child', label: '添加子步骤', children: typeChildren('child') },
+    { key: 'add-sibling', label: '添加同级步骤', children: typeChildren('sibling') },
   ];
 }
 
-function handleIfStepAddMenuClick(
+function handleForStepAddMenuClick(
   key: string,
   handlers: {
     onAddChildStep: (stepType: StepType) => void;
@@ -114,174 +104,157 @@ function handleIfStepAddMenuClick(
   else handlers.onAddSiblingStep(stepType);
 }
 
-const IF_COND_POPOVER_WIDTH_SINGLE = 360;
-const IF_COND_POPOVER_WIDTH_DUAL = 780;
-const IF_COND_COLUMN_MIN_WIDTH = 320;
-
-function IfConditionFields({
-  clause,
-  showRemove,
-  onPatch,
-  onRemove,
-}: {
-  clause: IfConditionClause;
-  showRemove?: boolean;
-  onPatch: (patch: Partial<IfConditionClause>) => void;
-  onRemove?: () => void;
-}) {
-  return (
-    <div style={{ flex: 1, minWidth: IF_COND_COLUMN_MIN_WIDTH }}>
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-        <DynamicValueTextArea
-          rows={2}
-          placeholder="请输入表达式"
-          value={clause.expr}
-          onChange={(e) => onPatch({ expr: e.target.value })}
-          hideGlowUntilHover
-        />
-        <Select
-          style={{ width: '100%' }}
-          value={clause.op || '等于'}
-          options={IF_COND_OP_OPTIONS.map((x) => ({ label: x, value: x }))}
-          onChange={(v) => onPatch({ op: String(v) })}
-        />
-        <DynamicValueTextArea
-          rows={2}
-          placeholder="预期值"
-          value={clause.value}
-          onChange={(e) => onPatch({ value: e.target.value })}
-          hideGlowUntilHover
-        />
-      </Space>
-      {showRemove && onRemove ? (
-        <Button type="link" size="small" danger style={{ paddingInline: 0, marginTop: 4 }} onClick={onRemove}>
-          删除条件
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-function IfConditionEditor({
+function ForLoopConfigEditor({
   config,
-  canAddElseIf,
-  canAddElse,
   onChange,
-  onAddSiblingBranch,
+  onClose,
 }: {
-  config: IfStepConfig;
-  canAddElseIf: boolean;
-  canAddElse: boolean;
-  onChange: (next: IfStepConfig) => void;
-  onAddSiblingBranch: (kind: 'elseif' | 'else') => void;
+  config: ForStepConfig;
+  onChange: (next: ForStepConfig) => void;
+  onClose: () => void;
 }) {
-  const isElse = config.branchKind === 'else';
-  const conditions = getIfConditions(config);
-  const isDual = conditions.length >= 2;
-  const combineLogic = config.combineLogic ?? '或';
+  const breakConditions = config.breakConditions;
+  const breakCombineLogic = config.breakCombineLogic ?? '且';
 
-  const patchConditions = (nextList: IfConditionClause[], logic?: IfCombineLogic) => {
-    onChange(withIfConditions(config, nextList, logic ?? combineLogic));
+  const patchConfig = (patch: Partial<ForStepConfig>) => onChange({ ...config, ...patch });
+
+  const updateBreak = (id: string, patch: Partial<ForBreakCondition>) => {
+    patchConfig({
+      breakConditions: breakConditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    });
   };
 
-  const updateClause = (id: string, patch: Partial<IfConditionClause>) => {
-    patchConditions(
-      conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-      combineLogic
-    );
+  const removeBreak = (id: string) => {
+    patchConfig({ breakConditions: breakConditions.filter((c) => c.id !== id) });
   };
 
-  const addSecondCondition = () => {
-    if (conditions.length >= 2) return;
-    patchConditions([conditions[0], createIfConditionClause()], '或');
-  };
-
-  const removeSecondCondition = () => {
-    if (conditions.length < 2) return;
-    patchConditions([conditions[0]]);
+  const addBreak = () => {
+    patchConfig({ breakConditions: [...breakConditions, createForBreakCondition()] });
   };
 
   return (
-    <div style={{ width: isDual ? IF_COND_POPOVER_WIDTH_DUAL : IF_COND_POPOVER_WIDTH_SINGLE }}>
-      <div style={{ marginBottom: 12, fontWeight: 600 }}>条件分支</div>
-      {isElse ? (
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          Else 分支无需配置条件，不满足以上分支时执行其下子步骤。
-        </Text>
-      ) : isDual ? (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          <IfConditionFields clause={conditions[0]} onPatch={(p) => updateClause(conditions[0].id, p)} />
-          <Select
-            style={{ width: 64, flex: '0 0 auto', marginTop: 32 }}
-            value={combineLogic}
-            options={IF_COMBINE_LOGIC_OPTIONS.map((x) => ({ label: x, value: x }))}
-            onChange={(v) => patchConditions(conditions, v as IfCombineLogic)}
-          />
-          <IfConditionFields
-            clause={conditions[1]}
-            showRemove
-            onPatch={(p) => updateClause(conditions[1].id, p)}
-            onRemove={removeSecondCondition}
-          />
-        </div>
-      ) : (
-        <IfConditionFields
-          clause={conditions[0]}
-          onPatch={(p) => updateClause(conditions[0].id, p)}
-        />
-      )}
+    <div style={{ width: FOR_CONFIG_POPOVER_WIDTH }}>
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginTop: 12,
-          gap: 8,
-          flexWrap: 'wrap',
+          marginBottom: 16,
         }}
       >
-        <Space size={8} wrap>
-          <Button
-            size="small"
-            disabled={!canAddElseIf}
-            onClick={() => onAddSiblingBranch('elseif')}
-          >
-            + Else If
-          </Button>
-          <Button size="small" disabled={!canAddElse} onClick={() => onAddSiblingBranch('else')}>
-            + Else
-          </Button>
-        </Space>
-        {!isElse ? (
-          <Button
-            type="primary"
-            size="small"
-            disabled={isDual}
-            onClick={addSecondCondition}
-          >
-            +判断条件
-          </Button>
-        ) : null}
+        <span style={{ fontWeight: 600, fontSize: 14 }}>For 循环</span>
+        <Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} aria-label="关闭" />
       </div>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <div>
+          <div style={{ marginBottom: 6, fontSize: 13 }}>待循环的数组</div>
+          <Input
+            placeholder="例: [1,2,3] 或者 range(0,100)"
+            value={config.loopArray}
+            onChange={(e) => patchConfig({ loopArray: e.target.value })}
+          />
+        </div>
+        <div>
+          <div style={{ marginBottom: 6, fontSize: 13 }}>循环变量</div>
+          <Input
+            placeholder="例: taskId"
+            value={config.loopVariable}
+            onChange={(e) => patchConfig({ loopVariable: e.target.value })}
+          />
+        </div>
+        <div>
+          <div style={{ marginBottom: 8, fontSize: 13 }}>中断条件</div>
+          {breakConditions.length > 0
+            ? breakConditions.map((clause, index) => (
+                <div key={clause.id}>
+                  {index > 0 ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        margin: '4px 0 8px',
+                      }}
+                    >
+                      <Select
+                        size="small"
+                        style={{ width: 64 }}
+                        value={breakCombineLogic}
+                        options={FOR_BREAK_COMBINE_LOGIC_OPTIONS.map((x) => ({
+                          label: x,
+                          value: x,
+                        }))}
+                        onChange={(v) =>
+                          patchConfig({ breakCombineLogic: v as ForBreakCombineLogic })
+                        }
+                      />
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: FOR_BREAK_ROW_COLUMNS,
+                      gap: 8,
+                      alignItems: 'center',
+                      padding: '8px 10px',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 6,
+                      background: '#fafafa',
+                    }}
+                  >
+                    <DynamicValueInput
+                      size="small"
+                      placeholder="请输入表达式"
+                      value={clause.expr}
+                      onChange={(e) => updateBreak(clause.id, { expr: e.target.value })}
+                      hideGlowUntilHover
+                    />
+                    <Select
+                      size="small"
+                      style={{ width: '100%' }}
+                      value={clause.op || '等于'}
+                      options={FOR_BREAK_OP_OPTIONS.map((x) => ({ label: x, value: x }))}
+                      onChange={(v) => updateBreak(clause.id, { op: String(v) })}
+                    />
+                    <DynamicValueInput
+                      size="small"
+                      placeholder="请输入预期值"
+                      value={clause.value}
+                      onChange={(e) => updateBreak(clause.id, { value: e.target.value })}
+                      hideGlowUntilHover
+                    />
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<CloseOutlined />}
+                      aria-label="删除中断条件"
+                      onClick={() => removeBreak(clause.id)}
+                    />
+                  </div>
+                </div>
+              ))
+            : null}
+          <Button type="link" style={{ paddingInline: 0 }} onClick={addBreak}>
+            + 中断条件
+          </Button>
+        </div>
+      </Space>
     </div>
   );
 }
 
-export function CaseIfStepBlock({
-  step: _step,
+export function CaseForStepBlock({
+  step,
   selected,
   config,
   childSteps,
   stepTypeById,
   activeStepId,
-  conditionPopoverOpen,
-  canAddElseIf,
-  canAddElse,
+  configPopoverOpen,
   onToggleExpand,
-  onOpenConditionPopover,
-  onCloseConditionPopover,
+  onOpenConfigPopover,
+  onCloseConfigPopover,
   onUpdateConfig,
-  onAddSiblingBranch,
   onSelectStep,
   onCopyStep,
   onDeleteStep,
@@ -296,15 +269,14 @@ export function CaseIfStepBlock({
   onStepCopyCheckChange,
   isChildCopyChecked,
   onChildCopyCheckChange,
-}: CaseIfStepBlockProps) {
+}: CaseForStepBlockProps) {
   const expanded = config.expanded !== false;
-  const summary = useMemo(() => formatIfConditionSummary(config), [config]);
-  const kindLabel = ifBranchKindLabel(config.branchKind);
-
+  const configSummary = useMemo(() => formatForStepSummary(config), [config]);
+  const headerLabel = configSummary || step.title;
   const addMenuItems: MenuProps['items'] = CASE_STEP_TYPES.map((t) => ({ key: t, label: t }));
-  const headerAddMenuItems = useMemo(() => buildIfStepAddMenuItems(), []);
+  const headerAddMenuItems = useMemo(() => buildForStepAddMenuItems(), []);
   const onHeaderAddMenuClick: MenuProps['onClick'] = ({ key }) =>
-    handleIfStepAddMenuClick(String(key), {
+    handleForStepAddMenuClick(String(key), {
       onAddChildStep,
       onAddSiblingStep,
       onOpenDbStepCreate,
@@ -318,7 +290,7 @@ export function CaseIfStepBlock({
     return (
       <div
         key={child.id}
-        className="case-if-child-row"
+        className="case-for-child-row"
         style={{
           marginBottom: 6,
           padding: '6px 8px',
@@ -368,7 +340,7 @@ export function CaseIfStepBlock({
 
   return (
     <div
-      className="case-if-step-block"
+      className="case-for-step-block"
       style={{
         marginBottom: 8,
         borderRadius: 6,
@@ -378,39 +350,34 @@ export function CaseIfStepBlock({
       }}
     >
       <Popover
-        open={conditionPopoverOpen}
+        open={configPopoverOpen}
         onOpenChange={(open) => {
-          if (!open) onCloseConditionPopover();
+          if (!open) onCloseConfigPopover();
         }}
         trigger="click"
         placement="rightTop"
         content={
-          <IfConditionEditor
+          <ForLoopConfigEditor
             config={config}
-            canAddElseIf={canAddElseIf}
-            canAddElse={canAddElse}
             onChange={onUpdateConfig}
-            onAddSiblingBranch={(kind) => {
-              onAddSiblingBranch(kind);
-              onCloseConditionPopover();
-            }}
+            onClose={onCloseConfigPopover}
           />
         }
       >
         <div
-          className="case-if-step-header"
+          className="case-for-step-header"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '6px 8px',
             cursor: 'pointer',
-            background: selected ? '#bae0ff' : '#f5f9ff',
+            background: selected ? '#bae0ff' : '#fffbe6',
             borderBottom: expanded ? '1px solid #e8e8e8' : undefined,
           }}
           onClick={() => {
             onSelectStep();
-            onOpenConditionPopover();
+            onOpenConfigPopover();
           }}
         >
           <Checkbox
@@ -427,13 +394,13 @@ export function CaseIfStepBlock({
               onToggleExpand();
             }}
           />
-          <Tag color="blue" style={{ marginInlineEnd: 0 }}>
-            {kindLabel}
+          <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+            For 循环
           </Tag>
-          <Text ellipsis={{ tooltip: summary }} style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
-            {summary}
+          <Text ellipsis={{ tooltip: headerLabel }} style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
+            {headerLabel}
           </Text>
-          <Space size={0} className="case-if-step-header-actions" onClick={(e) => e.stopPropagation()}>
+          <Space size={0} className="case-for-step-header-actions" onClick={(e) => e.stopPropagation()}>
             <Button type="text" size="small" icon={<CopyOutlined />} onClick={onCopyStep} />
             <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={onDeleteStep} />
             <Dropdown
@@ -467,7 +434,7 @@ export function CaseIfStepBlock({
             }}
           >
             <div
-              className="case-if-add-child-zone"
+              className="case-for-add-child-zone"
               style={{
                 marginTop: childSteps.length > 0 ? 4 : 0,
                 padding: '10px 8px',

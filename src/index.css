@@ -33,3 +33,9 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* 用例详情步骤栏底部：添加 / 复制 / 粘贴三等宽 */
+.case-step-footer-actions .ant-dropdown-trigger {
+  display: block;
+  width: 100%;
+}

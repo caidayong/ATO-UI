@@ -1,6 +1,6 @@
 /**
  * @page 用例管理
- * @version V1.0.40
+ * @version V1.0.47
  * @base docs/spec/04-页面契约.md § 页面 5（用例管理）；ATO_V1.0.0-页面需求与交互规格.md 第 4.5 节（用例管理）
  * @changes
  *   - V1.0.0: 新窗口内 3:7 分栏；目录树（右键菜单占位）；用例列表；用例详情多 Tab；步骤简版编辑器（Mock 状态）
@@ -44,6 +44,13 @@
  *   - V1.0.38: 条件弹框底部增加「+判断条件」；支持双条件横向编排，中间「或/且」连接（默认或），最多两条。
  *   - V1.0.39: 双条件弹框加宽；表达式/预期值接入 DynamicValueTextArea，荧光棒 hover 显示（公共组件）。
  *   - V1.0.40: 断言 Tab「失败中断」列表头增加全选复选框（默认勾选），支持批量开启/取消。
+ *   - V1.0.41: If 块头部「+」悬停：添加子步骤 / 添加同级步骤，子菜单与「添加步骤」类型一致；同级步骤插入至 If 链（含 Else If/Else）之后。
+ *   - V1.0.42: For 循环步骤块：点击行首弹出配置（待循环数组 / 循环变量 / 中断条件）；中断条件默认空，「+ 中断条件」逐条新增。
+ *   - V1.0.43: 调试结果抽屉仅覆盖步骤详情栏，宽度随步骤栏拖拽动态变化，不遮挡左侧步骤列表。
+ *   - V1.0.44: For 循环中断条件支持多条之间的「且/或」逻辑选择，默认「且」。
+ *   - V1.0.45: 用例列表工具栏增加「标签」：勾选后高亮可点，弹出新增/移除模式与标签多选，确认后批量更新选中用例标签（Mock）。
+ *   - V1.0.46: 步骤栏行首增加复选框，支持多选后「复制步骤」；剪贴板可跨用例「粘贴步骤」批量追加（按列表顺序）。
+ *   - V1.0.47: 步骤栏标题「步骤」前增加勾选框，勾选/取消即全选或清空当前用例全部步骤（含 If/For 子步骤）。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -61,6 +68,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popover,
   Select,
   Space,
   Spin,
@@ -98,10 +106,12 @@ import {
   SearchOutlined,
   StopOutlined,
   SwapOutlined,
+  TagsOutlined,
   UploadOutlined,
   DownOutlined,
 } from '@ant-design/icons';
 import { CaseIfStepBlock } from '@/components/CaseIfStepBlock';
+import { CaseForStepBlock } from '@/components/CaseForStepBlock';
 import {
   defaultIfStepConfig,
   findInsertIndexAfterStep,
@@ -110,6 +120,12 @@ import {
   type IfStepConfig,
   syncIfStepTitle,
 } from '@/utils/caseIfStep';
+import {
+  defaultForStepConfig,
+  normalizeForStepConfig,
+  type ForStepConfig,
+  syncForStepTitle,
+} from '@/utils/caseForStep';
 import {
   mockCaseModules,
   mockCaseSteps,
@@ -308,6 +324,7 @@ type CopiedStepClipboard = {
   parentStepId?: string;
   ifConfig?: IfStepConfig;
   ifChainRoot?: string;
+  forConfig?: ForStepConfig;
 };
 
 function cloneRowList<T extends { id: string }>(rows: T[], prefix: string): T[] {
@@ -526,7 +543,7 @@ function CaseDebugStepDrawer({
     <Drawer
       title={renderTitle()}
       placement="right"
-      width="calc(100% - 256px)"
+      width="100%"
       mask={false}
       open={open}
       onClose={onClose}
@@ -597,6 +614,10 @@ export function CaseManagement() {
   /** If 链：Else If / Else 根步骤指向链首 If 步骤 id */
   const [ifChainRootByStepId, setIfChainRootByStepId] = useState<Record<string, string>>({});
   const [ifConditionPopoverStepId, setIfConditionPopoverStepId] = useState<string | null>(null);
+  const [forConfigByStepId, setForConfigByStepId] = useState<Record<string, ForStepConfig>>(() => ({
+    'st-6': defaultForStepConfig(),
+  }));
+  const [forConfigPopoverStepId, setForConfigPopoverStepId] = useState<string | null>(null);
   const [dbStepCreateType, setDbStepCreateType] = useState<DbType>('MariaDb');
   const [dbStepCreateName, setDbStepCreateName] = useState('');
   const [dbTypeByStepId, setDbTypeByStepId] = useState<Record<string, DbType>>({});
@@ -638,12 +659,17 @@ export function CaseManagement() {
   const [copyAssertToOpen, setCopyAssertToOpen] = useState(false);
   const [copyAssertCaseIdsInput, setCopyAssertCaseIdsInput] = useState('');
   const [copyAssertSource, setCopyAssertSource] = useState<{ caseId: string; stepId: string } | null>(null);
-  /** 步骤栏复制/粘贴剪贴板（跨用例、跨 Tab 保留） */
-  const [copiedStepClipboard, setCopiedStepClipboard] = useState<CopiedStepClipboard | null>(null);
+  /** 步骤栏复制/粘贴剪贴板（跨用例、跨 Tab 保留，支持多步） */
+  const [copiedStepsClipboard, setCopiedStepsClipboard] = useState<CopiedStepClipboard[] | null>(null);
+  /** 步骤栏多选复制：按用例记录已勾选步骤 id */
+  const [selectedStepIdsByCase, setSelectedStepIdsByCase] = useState<Record<string, string[]>>({});
   const [exportCasesOpen, setExportCasesOpen] = useState(false);
   const [exportModuleIds, setExportModuleIds] = useState<string[]>([]);
   const [copyCasesToModalOpen, setCopyCasesToModalOpen] = useState(false);
   const [copyCasesToTargetModuleId, setCopyCasesToTargetModuleId] = useState<string | undefined>(undefined);
+  const [batchTagPopoverOpen, setBatchTagPopoverOpen] = useState(false);
+  const [batchTagMode, setBatchTagMode] = useState<'add' | 'remove'>('add');
+  const [batchTagSelected, setBatchTagSelected] = useState<string[]>([]);
   const [caseDebugPhaseByCaseId, setCaseDebugPhaseByCaseId] = useState<
     Record<string, 'idle' | 'running' | 'done'>
   >({});
@@ -963,8 +989,71 @@ export function CaseManagement() {
     [getSteps, stepParentById]
   );
 
+  const getSelectedStepIdSet = useCallback(
+    (caseId: string) => new Set(selectedStepIdsByCase[caseId] ?? []),
+    [selectedStepIdsByCase]
+  );
+
+  const toggleStepCopyChecked = useCallback((caseId: string, stepId: string, checked: boolean) => {
+    setSelectedStepIdsByCase((prev) => {
+      const cur = new Set(prev[caseId] ?? []);
+      if (checked) cur.add(stepId);
+      else cur.delete(stepId);
+      return { ...prev, [caseId]: [...cur] };
+    });
+  }, []);
+
+  const walkStepsInListOrder = useCallback(
+    (caseId: string, visit: (step: CaseStep) => void) => {
+      const walk = (list: CaseStep[]) => {
+        list.forEach((s) => {
+          visit(s);
+          const t = stepTypeById[s.id] ?? '接口请求';
+          if (t === 'if判断' || t === 'for循环') {
+            walk(getChildSteps(caseId, s.id));
+          }
+        });
+      };
+      walk(getRootSteps(caseId));
+    },
+    [getChildSteps, getRootSteps, stepTypeById]
+  );
+
+  const collectAllStepIdsInOrder = useCallback(
+    (caseId: string) => {
+      const ids: string[] = [];
+      walkStepsInListOrder(caseId, (s) => ids.push(s.id));
+      return ids;
+    },
+    [walkStepsInListOrder]
+  );
+
+  const collectSelectedStepsInOrder = useCallback(
+    (caseId: string, selected: Set<string>): CaseStep[] => {
+      const out: CaseStep[] = [];
+      walkStepsInListOrder(caseId, (s) => {
+        if (selected.has(s.id)) out.push(s);
+      });
+      return out;
+    },
+    [walkStepsInListOrder]
+  );
+
+  const setAllStepsCopyChecked = useCallback(
+    (caseId: string, checked: boolean) => {
+      setSelectedStepIdsByCase((prev) => ({
+        ...prev,
+        [caseId]: checked ? collectAllStepIdsInOrder(caseId) : [],
+      }));
+    },
+    [collectAllStepIdsInOrder]
+  );
+
   const getIfConfig = (stepId: string): IfStepConfig =>
     normalizeIfStepConfig(stepId, ifConfigByStepId[stepId]);
+
+  const getForConfig = (stepId: string): ForStepConfig =>
+    normalizeForStepConfig(forConfigByStepId[stepId]);
 
   const getIfChainRootId = (stepId: string) => ifChainRootByStepId[stepId] ?? stepId;
 
@@ -1533,6 +1622,11 @@ export function CaseManagement() {
       setIfConfigByStepId((prev) => ({ ...prev, [sid]: cfg }));
       stepTitle = syncIfStepTitle(cfg, stepTitle);
     }
+    if (stepType === 'for循环') {
+      const cfg = defaultForStepConfig();
+      setForConfigByStepId((prev) => ({ ...prev, [sid]: cfg }));
+      stepTitle = syncForStepTitle(cfg, stepTitle);
+    }
     const nextList = [...all];
     nextList.splice(insertIndex, 0, {
       id: sid,
@@ -1595,6 +1689,11 @@ export function CaseManagement() {
       return next;
     });
     setIfConfigByStepId((prev) => {
+      const next = { ...prev };
+      removeIds.forEach((id) => delete next[id]);
+      return next;
+    });
+    setForConfigByStepId((prev) => {
       const next = { ...prev };
       removeIds.forEach((id) => delete next[id]);
       return next;
@@ -2160,6 +2259,29 @@ export function CaseManagement() {
     setDbStepCreateName('');
     setDbStepCreateOpen(true);
   };
+
+  const addStepAfterIfBlock = (caseId: string, fromStepId: string, stepType: StepType) => {
+    const all = getSteps(caseId);
+    const insertIndex = findInsertIndexAfterIfChain(caseId, fromStepId);
+    const afterStepId = insertIndex > 0 ? all[insertIndex - 1].id : undefined;
+    if (stepType === '数据库操作') {
+      openDbStepCreate(caseId, afterStepId);
+    } else {
+      addStepAt(caseId, stepType, afterStepId);
+    }
+  };
+
+  const addStepAfterForBlock = (caseId: string, fromStepId: string, stepType: StepType) => {
+    const all = getSteps(caseId);
+    const insertIndex = findInsertIndexAfterStep(all, fromStepId, stepParentById);
+    const afterStepId = insertIndex > 0 ? all[insertIndex - 1].id : undefined;
+    if (stepType === '数据库操作') {
+      openDbStepCreate(caseId, afterStepId);
+    } else {
+      addStepAt(caseId, stepType, afterStepId);
+    }
+  };
+
   const submitDbStepCreate = () => {
     const name = dbStepCreateName.trim();
     if (!name) {
@@ -2387,6 +2509,10 @@ export function CaseManagement() {
         : undefined,
     ifChainRoot:
       (stepTypeById[stepId] ?? '接口请求') === 'if判断' ? getIfChainRootId(stepId) : undefined,
+    forConfig:
+      (stepTypeById[stepId] ?? '接口请求') === 'for循环'
+        ? JSON.parse(JSON.stringify(getForConfig(stepId)))
+        : undefined,
   });
 
   const applyCopiedStepConfig = (newStepId: string, snap: CopiedStepClipboard) => {
@@ -2506,43 +2632,57 @@ export function CaseManagement() {
         setIfChainRootByStepId((prev) => ({ ...prev, [newStepId]: snap.ifChainRoot! }));
       }
     }
+    if (snap.forConfig) {
+      setForConfigByStepId((prev) => ({
+        ...prev,
+        [newStepId]: JSON.parse(JSON.stringify(snap.forConfig)) as ForStepConfig,
+      }));
+    }
   };
 
-  const copyStepToClipboard = (caseId: string) => {
-    const list = getSteps(caseId);
-    const stepId = activeStepByCase[caseId] || list[0]?.id;
-    if (!stepId) {
-      message.warning('请先选中要复制的步骤');
+  const copyStepsToClipboard = (caseId: string) => {
+    const selected = getSelectedStepIdSet(caseId);
+    if (selected.size === 0) {
+      message.warning('请先勾选要复制的步骤');
       return;
     }
-    const step = list.find((s) => s.id === stepId);
-    if (!step) return;
-    setCopiedStepClipboard(buildStepClipboardSnapshot(stepId, step));
-    message.success('已复制步骤');
+    const steps = collectSelectedStepsInOrder(caseId, selected);
+    setCopiedStepsClipboard(steps.map((s) => buildStepClipboardSnapshot(s.id, s)));
+    message.success(`已复制 ${steps.length} 个步骤`);
   };
 
-  const pasteStepFromClipboard = (caseId: string) => {
-    if (!copiedStepClipboard) {
+  const pasteStepsFromClipboard = (caseId: string) => {
+    if (!copiedStepsClipboard?.length) {
       message.warning('请先复制步骤');
       return;
     }
-    const snap = copiedStepClipboard;
-    const sid = `st-${Date.now()}`;
     const baseList = getSteps(caseId);
-    const nextList = [
-      ...baseList,
-      {
+    const ts = Date.now();
+    const newRecords: CaseStep[] = [];
+    const newIds: string[] = [];
+
+    copiedStepsClipboard.forEach((snap, i) => {
+      const sid = `st-${ts}-${i}`;
+      newIds.push(sid);
+      newRecords.push({
         id: sid,
         caseId,
-        order: baseList.length + 1,
+        order: baseList.length + i + 1,
         title: snap.title,
         detail: snap.detail,
-      },
-    ].map((s, idx) => ({ ...s, order: idx + 1 }));
+      });
+      const snapForPaste: CopiedStepClipboard = {
+        ...snap,
+        parentStepId: undefined,
+        ifChainRoot: undefined,
+      };
+      applyCopiedStepConfig(sid, snapForPaste);
+    });
+
+    const nextList = [...baseList, ...newRecords].map((s, idx) => ({ ...s, order: idx + 1 }));
     setSteps((prev) => [...prev.filter((s) => s.caseId !== caseId), ...nextList]);
-    applyCopiedStepConfig(sid, snap);
-    setActiveStepByCase((prev) => ({ ...prev, [caseId]: sid }));
-    message.success('已粘贴步骤');
+    setActiveStepByCase((prev) => ({ ...prev, [caseId]: newIds[newIds.length - 1] ?? '' }));
+    message.success(`已粘贴 ${newIds.length} 个步骤`);
   };
 
   const openBodyJsonDynamicValue = (stepId: string) => {
@@ -2892,6 +3032,12 @@ export function CaseManagement() {
     const step = list.find((s) => s.id === stepId);
     const stepType: StepType = step ? stepTypeById[step.id] ?? '接口请求' : '接口请求';
     const debugPhase = caseDebugPhaseByCaseId[caseId] ?? 'idle';
+    const selectedStepSet = getSelectedStepIdSet(caseId);
+    const hasStepCopySelection = selectedStepSet.size > 0;
+    const allCopyableStepIds = collectAllStepIdsInOrder(caseId);
+    const allStepsCopySelected =
+      allCopyableStepIds.length > 0 && allCopyableStepIds.every((id) => selectedStepSet.has(id));
+    const someStepsCopySelected = allCopyableStepIds.some((id) => selectedStepSet.has(id));
 
     return (
       <div
@@ -3023,7 +3169,19 @@ export function CaseManagement() {
           >
           <Card
             size="small"
-            title="步骤"
+            title={
+              <Space size={8} align="center">
+                {allCopyableStepIds.length > 0 ? (
+                  <Checkbox
+                    checked={allStepsCopySelected}
+                    indeterminate={someStepsCopySelected && !allStepsCopySelected}
+                    onChange={(e) => setAllStepsCopyChecked(caseId, e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : null}
+                <span>步骤</span>
+              </Space>
+            }
             style={{
               flex: `0 0 ${stepPaneWidthPx}px`,
               width: stepPaneWidthPx,
@@ -3036,6 +3194,63 @@ export function CaseManagement() {
             <div className="case-step-list">
               {rootSteps.map((item) => {
                 const itemType = stepTypeById[item.id] ?? '接口请求';
+                if (itemType === 'for循环') {
+                  const forCfg = getForConfig(item.id);
+                  return (
+                    <CaseForStepBlock
+                      key={item.id}
+                      step={item}
+                      selected={item.id === stepId}
+                      config={forCfg}
+                      childSteps={getChildSteps(caseId, item.id)}
+                      stepTypeById={stepTypeById}
+                      activeStepId={stepId}
+                      configPopoverOpen={forConfigPopoverStepId === item.id}
+                      onToggleExpand={() =>
+                        setForConfigByStepId((prev) => ({
+                          ...prev,
+                          [item.id]: { ...forCfg, expanded: forCfg.expanded === false },
+                        }))
+                      }
+                      onOpenConfigPopover={() => setForConfigPopoverStepId(item.id)}
+                      onCloseConfigPopover={() => setForConfigPopoverStepId(null)}
+                      onUpdateConfig={(cfg) => {
+                        setForConfigByStepId((prev) => ({ ...prev, [item.id]: cfg }));
+                        setSteps((prev) =>
+                          prev.map((s) =>
+                            s.id === item.id ? { ...s, title: syncForStepTitle(cfg, s.title) } : s
+                          )
+                        );
+                      }}
+                      onSelectStep={() =>
+                        setActiveStepByCase((prev) => ({ ...prev, [caseId]: item.id }))
+                      }
+                      onCopyStep={() => copyStep(caseId, item.id)}
+                      onDeleteStep={() => confirmDeleteStep(caseId, item.id)}
+                      onAddChildStep={(type) =>
+                        addStepAt(caseId, type, undefined, { parentStepId: item.id })
+                      }
+                      onAddSiblingStep={(type) => addStepAfterForBlock(caseId, item.id, type)}
+                      onSelectChildStep={(childId) =>
+                        setActiveStepByCase((prev) => ({ ...prev, [caseId]: childId }))
+                      }
+                      onCopyChildStep={(childId) => copyStep(caseId, childId)}
+                      onDeleteChildStep={(childId) => confirmDeleteStep(caseId, childId)}
+                      onOpenDbStepCreate={(afterChildId) =>
+                        openDbStepCreate(caseId, afterChildId, item.id)
+                      }
+                      onOpenDbStepCreateSibling={() =>
+                        addStepAfterForBlock(caseId, item.id, '数据库操作')
+                      }
+                      stepCopyChecked={selectedStepSet.has(item.id)}
+                      onStepCopyCheckChange={(checked) => toggleStepCopyChecked(caseId, item.id, checked)}
+                      isChildCopyChecked={(childId) => selectedStepSet.has(childId)}
+                      onChildCopyCheckChange={(childId, checked) =>
+                        toggleStepCopyChecked(caseId, childId, checked)
+                      }
+                    />
+                  );
+                }
                 if (itemType === 'if判断') {
                   const ifCfg = getIfConfig(item.id);
                   const chainFlags = getIfChainBranchFlags(caseId, item.id);
@@ -3077,6 +3292,7 @@ export function CaseManagement() {
                       onAddChildStep={(type) =>
                         addStepAt(caseId, type, undefined, { parentStepId: item.id })
                       }
+                      onAddSiblingStep={(type) => addStepAfterIfBlock(caseId, item.id, type)}
                       onSelectChildStep={(childId) =>
                         setActiveStepByCase((prev) => ({ ...prev, [caseId]: childId }))
                       }
@@ -3084,6 +3300,13 @@ export function CaseManagement() {
                       onDeleteChildStep={(childId) => confirmDeleteStep(caseId, childId)}
                       onOpenDbStepCreate={(afterChildId) =>
                         openDbStepCreate(caseId, afterChildId, item.id)
+                      }
+                      onOpenDbStepCreateSibling={() => addStepAfterIfBlock(caseId, item.id, '数据库操作')}
+                      stepCopyChecked={selectedStepSet.has(item.id)}
+                      onStepCopyCheckChange={(checked) => toggleStepCopyChecked(caseId, item.id, checked)}
+                      isChildCopyChecked={(childId) => selectedStepSet.has(childId)}
+                      onChildCopyCheckChange={(childId, checked) =>
+                        toggleStepCopyChecked(caseId, childId, checked)
                       }
                     />
                   );
@@ -3151,6 +3374,11 @@ export function CaseManagement() {
                       minWidth: 0,
                     }}
                   >
+                    <Checkbox
+                      checked={selectedStepSet.has(item.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => toggleStepCopyChecked(caseId, item.id, e.target.checked)}
+                    />
                     {(() => {
                       const r = caseDebugResultsByCaseId[caseId]?.[item.id];
                       if (debugPhase !== 'done' || !r) return null;
@@ -3223,40 +3451,50 @@ export function CaseManagement() {
               })}
             </div>
             <div
+              className="case-step-footer-actions"
               style={{
                 display: 'flex',
                 gap: 8,
                 marginTop: 8,
-                alignItems: 'center',
-                flexWrap: 'nowrap',
+                alignItems: 'stretch',
               }}
             >
-              <Dropdown
-                trigger={['hover', 'click']}
-                menu={{
-                  items: STEP_TYPES.map((t) => ({ key: t, label: t })),
-                  onClick: ({ key }) => {
-                    const chosen = String(key) as StepType;
-                    if (chosen === '数据库操作') {
-                      openDbStepCreate(caseId);
-                    } else {
-                      addStepAt(caseId, chosen);
-                    }
-                  },
-                }}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Dropdown
+                  trigger={['hover', 'click']}
+                  menu={{
+                    items: STEP_TYPES.map((t) => ({ key: t, label: t })),
+                    onClick: ({ key }) => {
+                      const chosen = String(key) as StepType;
+                      if (chosen === '数据库操作') {
+                        openDbStepCreate(caseId);
+                      } else {
+                        addStepAt(caseId, chosen);
+                      }
+                    },
+                  }}
+                >
+                  <Button type="primary" size="small" block>
+                    添加步骤 <DownOutlined />
+                  </Button>
+                </Dropdown>
+              </div>
+              <Button
+                type={hasStepCopySelection ? 'primary' : 'default'}
+                size="small"
+                block
+                style={{ flex: 1, minWidth: 0 }}
+                disabled={!hasStepCopySelection}
+                onClick={() => copyStepsToClipboard(caseId)}
               >
-                <Button type="primary" size="small" style={{ flex: 1, minWidth: 0 }}>
-                  添加步骤 <DownOutlined />
-                </Button>
-              </Dropdown>
-              <Button size="small" style={{ flexShrink: 0 }} onClick={() => copyStepToClipboard(caseId)}>
                 复制步骤
               </Button>
               <Button
                 size="small"
-                style={{ flexShrink: 0 }}
-                disabled={!copiedStepClipboard}
-                onClick={() => pasteStepFromClipboard(caseId)}
+                block
+                style={{ flex: 1, minWidth: 0 }}
+                disabled={!copiedStepsClipboard?.length}
+                onClick={() => pasteStepsFromClipboard(caseId)}
               >
                 粘贴步骤
               </Button>
@@ -3271,6 +3509,17 @@ export function CaseManagement() {
           >
             <HolderOutlined />
           </div>
+          <div
+            className="case-detail-step-detail-pane"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: '100%',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
           <Card
             size="small"
             title={step ? `步骤 ${step.order}` : '步骤详情'}
@@ -4603,6 +4852,19 @@ export function CaseManagement() {
                       在左侧步骤栏点击 If 判断 行首，配置条件分支（表达式 / 运算符 / 预期值）；在 If 块内添加子步骤，类型与「添加步骤」一致。
                     </Text>
                   </div>
+                ) : stepType === 'for循环' ? (
+                  <div
+                    style={{
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 6,
+                      padding: 16,
+                      background: '#fafafa',
+                    }}
+                  >
+                    <Text type="secondary">
+                      在左侧步骤栏点击 For 循环 行首，配置待循环数组、循环变量与中断条件；在 For 块内添加子步骤，类型与「添加步骤」一致。
+                    </Text>
+                  </div>
                 ) : stepType === '等待' ? (
                   <div
                     style={{
@@ -4689,6 +4951,7 @@ export function CaseManagement() {
               </button>
             </Tooltip>
           ) : null}
+          </div>
         </div>
         </div>
       </div>
@@ -4705,6 +4968,43 @@ export function CaseManagement() {
       return next;
     });
     message.success(enabled ? '已批量启用' : '已批量禁用');
+  };
+
+  const closeBatchTagPopover = () => {
+    setBatchTagPopoverOpen(false);
+    setBatchTagMode('add');
+    setBatchTagSelected([]);
+  };
+
+  const applyBatchCaseTags = () => {
+    if (selectedCaseIds.length === 0) return;
+    if (batchTagSelected.length === 0) {
+      message.warning('请选择标签');
+      return;
+    }
+    const tagSet = new Set(batchTagSelected);
+    const idSet = new Set(selectedCaseIds);
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    setCases((prev) =>
+      prev.map((c) => {
+        if (!idSet.has(c.id)) return c;
+        const cur = c.tags ?? [];
+        if (batchTagMode === 'add') {
+          const merged = [...cur];
+          tagSet.forEach((t) => {
+            if (!merged.includes(t)) merged.push(t);
+          });
+          return { ...c, tags: merged, updatedAt: now };
+        }
+        return { ...c, tags: cur.filter((t) => !tagSet.has(t)), updatedAt: now };
+      })
+    );
+    message.success(
+      batchTagMode === 'add'
+        ? `已为 ${selectedCaseIds.length} 条用例添加标签`
+        : `已从 ${selectedCaseIds.length} 条用例移除标签`
+    );
+    closeBatchTagPopover();
   };
 
   const moduleOptions = modules
@@ -4875,6 +5175,74 @@ export function CaseManagement() {
       >
         调试运行
       </Button>
+      <Popover
+        open={batchTagPopoverOpen}
+        onOpenChange={(open) => {
+          if (selectedCaseIds.length === 0) return;
+          if (open) {
+            setBatchTagMode('add');
+            setBatchTagSelected([]);
+            setBatchTagPopoverOpen(true);
+          } else {
+            closeBatchTagPopover();
+          }
+        }}
+        trigger="click"
+        placement="bottomLeft"
+        content={
+          <div style={{ width: 300 }}>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                  编辑模式
+                </Text>
+                <Segmented
+                  block
+                  value={batchTagMode}
+                  onChange={(v) => setBatchTagMode(v as 'add' | 'remove')}
+                  options={[
+                    { label: '新增', value: 'add' },
+                    { label: '移除', value: 'remove' },
+                  ]}
+                />
+              </div>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                  {batchTagMode === 'add' ? '选择要新增的标签' : '选择要移除的标签'}
+                </Text>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={batchTagMode === 'add' ? '请选择标签' : '请选择要移除的标签'}
+                  options={caseDirectoryTagSelectOptions}
+                  value={batchTagSelected}
+                  onChange={(v) => setBatchTagSelected((v ?? []).map((t) => String(t)))}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                <Button size="small" onClick={closeBatchTagPopover}>
+                  取消
+                </Button>
+                <Button size="small" type="primary" onClick={applyBatchCaseTags}>
+                  确认
+                </Button>
+              </Space>
+            </Space>
+          </div>
+        }
+      >
+        <Button
+          icon={<TagsOutlined />}
+          disabled={selectedCaseIds.length === 0}
+          color={selectedCaseIds.length > 0 ? 'primary' : 'default'}
+          variant="outlined"
+        >
+          标签
+        </Button>
+      </Popover>
     </Space>
   );
 
