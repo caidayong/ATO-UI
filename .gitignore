@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Other VCS metadata
+.svn/
+
 # Project docs and local AI metadata (exclude from deploy repo)
 docs/
 prompt/
