@@ -1,6 +1,6 @@
 /**
  * @page 测试运行
- * @version V1.0.18
+ * @version V1.0.20
  * @base docs/spec/04-页面契约.md § 页面 9（测试运行）；PRD 章节待同步，以契约为准
  * @changes
  *   - V1.0.0: 初始实现测试运行页；支持创建自测任务、任务搜索、状态联动运行/停止、任务删除与任务详情跳转（Mock）
@@ -22,6 +22,8 @@
  *   - V1.0.16: 并行配置区块抽为共用组件；选择套件时若套件含并行配置则自动回填
  *   - V1.0.17: 创建任务弹窗并行配置移除「选择并行配置模版」与「另存为模版」
  *   - V1.0.18: 创建任务弹窗「自定义/选择套件」上移至执行范围之上；选择套件时仅下拉框并在下方只读回显套件用例范围与并行配置
+ *   - V1.0.19: 整机版本开发「运行环境」下拉改为资源管理 · 自动化环境名称
+ *   - V1.0.20: 订阅用例管理「调试运行 · 持久」写入的跨页任务（versionRunTasksBridge）
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -62,7 +64,12 @@ import {
   type ParallelPlanStepForm,
 } from '@/utils/parallelRunWizardShared';
 import { mockCaseModules, mockSuites, mockTestCases } from '@/mocks/data';
-import { versionDevRunDetailPath } from '@/constants/routes';
+import { useVersionDevRoutes } from '@/hooks/useVersionDevRoutes';
+import { getInitialRunTaskEnvs, useRunEnvironmentOptions } from '@/hooks/useRunEnvironmentOptions';
+import {
+  getExtraVersionRunTasks,
+  subscribeVersionRunTasks,
+} from '@/utils/versionRunTasksBridge';
 
 type RunScope = 'all' | 'module' | 'tag' | 'case';
 
@@ -262,6 +269,14 @@ export function TestRuns() {
   const { projectId = '', versionId = '' } = useParams<{ projectId: string; versionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toRunDetailPath } = useVersionDevRoutes();
+  const { options: runEnvOptions, defaultEnv, isDeviceVersionDev } = useRunEnvironmentOptions();
+  const [initialTaskEnvs] = useState(() => getInitialRunTaskEnvs());
+
+  const envSelectOptions = useMemo(
+    () => (isDeviceVersionDev ? runEnvOptions : [...ENV_OPTIONS_UI]),
+    [isDeviceVersionDev, runEnvOptions]
+  );
 
   const versionCases = useMemo(
     () => mockTestCases.filter((item) => item.versionId === versionId),
@@ -295,9 +310,9 @@ export function TestRuns() {
   const [tasks, setTasks] = useState<RunTask[]>([
     {
       id: 'RUN-20260330001',
-      name: 'SIT 全量自测',
+      name: isDeviceVersionDev ? '整机冒烟回归' : 'SIT 全量自测',
       versionId,
-      env: 'SIT',
+      env: initialTaskEnvs[0],
       scope: 'all',
       scopeValues: [],
       triggerTime: '2026-03-30 10:10:00',
@@ -311,9 +326,9 @@ export function TestRuns() {
     },
     {
       id: 'RUN-20260330002',
-      name: 'DEV smoke 巡检',
+      name: isDeviceVersionDev ? 'ADplus 巡检' : 'DEV smoke 巡检',
       versionId,
-      env: 'DEV',
+      env: initialTaskEnvs[1],
       scope: 'tag',
       scopeValues: ['smoke'],
       triggerTime: '2026-03-30 11:00:00',
@@ -327,6 +342,22 @@ export function TestRuns() {
     },
   ]);
   const [searchText, setSearchText] = useState('');
+
+  /** 合并用例管理「调试运行 · 持久」追加的任务 */
+  useEffect(() => {
+    const mergeExtraTasks = () => {
+      const extras = getExtraVersionRunTasks(versionId);
+      if (extras.length === 0) return;
+      setTasks((prev) => {
+        const ids = new Set(prev.map((t) => t.id));
+        const newOnes = extras.filter((t) => !ids.has(t.id));
+        if (newOnes.length === 0) return prev;
+        return [...newOnes, ...prev];
+      });
+    };
+    mergeExtraTasks();
+    return subscribeVersionRunTasks(mergeExtraTasks);
+  }, [versionId]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm] = Form.useForm<CreateRunForm>();
@@ -517,7 +548,7 @@ export function TestRuns() {
           style={{ padding: 0 }}
           onClick={() =>
             navigate({
-              pathname: versionDevRunDetailPath(projectId, versionId, id),
+              pathname: toRunDetailPath(projectId, versionId, id),
               search: location.search,
             })
           }
@@ -614,7 +645,7 @@ export function TestRuns() {
             setCreateOpen(true);
             createForm.setFieldsValue({
               name: '',
-              env: 'SIT',
+              env: defaultEnv,
               runTimes: 1,
               retryTimes: 1,
               timeoutMinutes: 5,
@@ -676,15 +707,19 @@ export function TestRuns() {
               <Form.Item name="env" label="运行环境" rules={[{ required: true, message: '请选择运行环境' }]}>
                 <Select
                   placeholder="请选择"
-                  options={[...ENV_OPTIONS_UI]}
-                  optionRender={(opt) => (
-                    <Space>
-                      <Tag color="processing" style={{ margin: 0 }}>
-                        {(opt.value as string).slice(0, 1)}
-                      </Tag>
-                      {opt.label}
-                    </Space>
-                  )}
+                  options={envSelectOptions}
+                  optionRender={
+                    isDeviceVersionDev
+                      ? undefined
+                      : (opt) => (
+                          <Space>
+                            <Tag color="processing" style={{ margin: 0 }}>
+                              {(opt.value as string).slice(0, 1)}
+                            </Tag>
+                            {opt.label}
+                          </Space>
+                        )
+                  }
                 />
               </Form.Item>
               <Form.Item name="runTimes" label="运行次数" rules={[{ required: true, message: '请输入运行次数' }]}>

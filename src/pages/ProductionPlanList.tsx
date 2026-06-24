@@ -4,12 +4,12 @@
  * @base ATO_V1.0.1-P4-页面需求与交互规格.md 第 4.1 节
  * @changes
  *   - V1.0.1-P4: 初始实现，包含计划列表、筛选搜索、新建计划、编辑/变更/删除入口
+ *   - V1.0.1-P6: 迁入 ListPageShell / FilterToolbar / FormModal（ato-ui 页面壳）
  */
 
 import { useMemo, useState } from 'react';
 import {
   Button,
-  Card,
   Empty,
   Form,
   Input,
@@ -18,7 +18,6 @@ import {
   Select,
   Space,
   Table,
-  Tabs,
   Tag,
   Tooltip,
   Upload,
@@ -27,6 +26,8 @@ import {
 import type { TableProps, UploadFile } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { FormModal, ListPageShell } from '@/components/layout';
+import { FILTER_CONTROL_WIDTH } from '@/constants/ui';
 import { mockProductionPlans } from '@/mocks/data';
 import { productionPlanDetailPath } from '@/constants/routes';
 import type { PlanFactory, ProductionPlan, ProductionPlanStatus } from '@/types';
@@ -315,11 +316,11 @@ export function ProductionPlanList() {
   ];
 
   return (
-    <div style={{ minHeight: 'calc(100vh - 140px)' }}>
-      <Card style={{ marginBottom: 16 }}>
-        <Tabs
-          activeKey={currentFactory}
-          onChange={(factoryKey) => {
+    <>
+      <ListPageShell
+        tabs={{
+          activeKey: currentFactory,
+          onChange: (factoryKey) => {
             const nextFactory = factoryKey as PlanFactory;
             setCurrentFactory(nextFactory);
             setSearchParams((prev) => {
@@ -331,20 +332,21 @@ export function ProductionPlanList() {
             setKeywordInput('');
             setQueryKeyword('');
             setPage(1);
-          }}
-          items={[
+          },
+          items: [
             { key: 'CN', label: '国内工厂' },
             { key: 'VN', label: '越南工厂' },
-          ]}
-          style={{ marginBottom: 8 }}
-        />
-        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+          ],
+        }}
+        toolbarLeft={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewPlanModalOpen(true)}>
             新建计划
           </Button>
-          <Space>
+        }
+        toolbarRight={
+          <>
             <Select
-              style={{ width: 140 }}
+              style={{ width: FILTER_CONTROL_WIDTH.select }}
               value={filters.week}
               options={[{ label: '全部周次', value: 'ALL' }, ...weekOptions]}
               onChange={(value) => {
@@ -353,7 +355,7 @@ export function ProductionPlanList() {
               }}
             />
             <Select
-              style={{ width: 140 }}
+              style={{ width: FILTER_CONTROL_WIDTH.select }}
               value={filters.status}
               options={[
                 { label: '全部状态', value: 'ALL' },
@@ -368,7 +370,7 @@ export function ProductionPlanList() {
               }}
             />
             <Input
-              style={{ width: 260 }}
+              style={{ width: FILTER_CONTROL_WIDTH.search }}
               allowClear
               prefix={<SearchOutlined />}
               placeholder="搜索 ID / 计划名称"
@@ -377,11 +379,27 @@ export function ProductionPlanList() {
               onPressEnter={handleQuery}
             />
             <Button onClick={handleQuery}>查询</Button>
+          </>
+        }
+        footer={
+          <Space style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <span style={{ color: 'rgba(0, 0, 0, 0.45)' }}>共 {filteredPlans.length} 条</span>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={filteredPlans.length}
+              showSizeChanger
+              pageSizeOptions={[10, 20, 50]}
+              onChange={(nextPage, nextPageSize) => {
+                setPage(nextPage);
+                if (nextPageSize !== pageSize) {
+                  setPageSize(nextPageSize);
+                }
+              }}
+            />
           </Space>
-        </Space>
-      </Card>
-
-      <Card>
+        }
+      >
         <Table
           rowKey="id"
           columns={columns}
@@ -398,32 +416,14 @@ export function ProductionPlanList() {
             ),
           }}
         />
-        <Space style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-          <span style={{ color: 'rgba(0, 0, 0, 0.45)' }}>共 {filteredPlans.length} 条</span>
-          <Pagination
-            current={page}
-            pageSize={pageSize}
-            total={filteredPlans.length}
-            showSizeChanger
-            pageSizeOptions={[10, 20, 50]}
-            onChange={(nextPage, nextPageSize) => {
-              setPage(nextPage);
-              if (nextPageSize !== pageSize) {
-                setPageSize(nextPageSize);
-              }
-            }}
-          />
-        </Space>
-      </Card>
+      </ListPageShell>
 
-      <Modal
+      <FormModal
         title="新建计划"
         open={newPlanModalOpen}
         onCancel={() => setNewPlanModalOpen(false)}
         onOk={() => void handleCreatePlan()}
         okText="确认"
-        cancelText="取消"
-        destroyOnClose
       >
         <Form<NewPlanFormValues> layout="vertical" form={newPlanForm}>
           <Form.Item name="planName" label="计划名称" rules={[{ required: true, message: '请输入计划名称' }]}>
@@ -440,16 +440,14 @@ export function ProductionPlanList() {
             </Upload>
           </Form.Item>
         </Form>
-      </Modal>
+      </FormModal>
 
-      <Modal
+      <FormModal
         title="编辑计划"
         open={editPlanModalOpen}
         onCancel={() => setEditPlanModalOpen(false)}
         onOk={() => void handleEditPlan()}
         okText="保存"
-        cancelText="取消"
-        destroyOnClose
       >
         <Form<EditPlanFormValues> layout="vertical" form={editPlanForm}>
           <Form.Item name="planName" label="计划名称" rules={[{ required: true, message: '请输入计划名称' }]}>
@@ -466,7 +464,7 @@ export function ProductionPlanList() {
             </Upload>
           </Form.Item>
         </Form>
-      </Modal>
-    </div>
+      </FormModal>
+    </>
   );
 }

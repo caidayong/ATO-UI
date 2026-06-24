@@ -5,6 +5,7 @@
  * @changes
  *   - V1.0.1-P6: 初始实现
  *   - V1.0.1-P6: 报告预览 + 报告编辑态；标题栏展示生成时间
+ *   - V1.0.1-P6: 2026-06-03 UI 验收通过
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftOutlined, EditOutlined, SaveOutlined, StopOutlined } from '@ant-design/icons';

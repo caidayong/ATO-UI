@@ -38,7 +38,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
 } from '@ant-design/icons';
-import { versionDevPath } from '@/constants/routes';
+import { useVersionDevRoutes } from '@/hooks/useVersionDevRoutes';
 import type { CaseModule } from '@/types';
 import { mockCaseModules, mockTestCases } from '@/mocks/data';
 import {
@@ -237,6 +237,7 @@ export function TestRunDetail() {
     runId: string;
   }>();
   const navigate = useNavigate();
+  const { toSegmentPath } = useVersionDevRoutes();
 
   const [activeTab, setActiveTab] = useState('detail');
   const [selectedRecordId, setSelectedRecordId] = useState(MOCK_RUN_RECORDS[0]?.id ?? '');
@@ -429,7 +430,7 @@ export function TestRunDetail() {
           onClick={() => {
             const q = new URLSearchParams({ caseId: id }).toString();
             navigate({
-              pathname: versionDevPath(projectId, versionId, 'cases'),
+              pathname: toSegmentPath(projectId, versionId, 'cases'),
               search: `?${q}`,
             });
           }}

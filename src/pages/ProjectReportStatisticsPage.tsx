@@ -4,6 +4,7 @@
  * @base docs/prd/V1.0.1-P6/ATO_V1.0.1-P6-页面需求与交互规格.md §3.3；docs/spec/04-页面契约.md § 页面 18
  * @changes
  *   - V1.0.1-P6: 初始实现
+ *   - V1.0.1-P6: 进入默认自然季度并自动查询；2026-06-03 UI 验收通过
  */
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons';
 import { Button, Card, DatePicker, Empty, Form, Select, Space, Statistic, Typography, message } from 'antd';

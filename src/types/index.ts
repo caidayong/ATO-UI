@@ -17,12 +17,74 @@ export interface User {
 export interface Project {
   id: string;
   name: string;
-  autoType: '接口自动化' | 'UI自动化' | '设备自动化';
+  autoType: '接口自动化' | 'UI自动化' | '设备自动化' | 'Robot Framework';
   team: string;
   projectType: '平台项目' | '整机项目';
   region?: '深圳' | '重庆' | '成都';
   createdAt: string;
   updatedAt: string;
+}
+
+/** 平台项目版本状态 */
+export type PlatformVersionStatus = '未发布' | '已发布' | '已召回';
+
+/** 整机项目版本状态 */
+export type WholeMachineVersionStatus = '开发中' | '已延期' | '已发布';
+
+/** 资源管理 · 设备管理（适配机型数据源） */
+export interface DeviceModel {
+  id: string;
+  name: string;
+  code: string;
+}
+
+/** 资源管理 · 设备资源上市状态 */
+export type DeviceMarketStatus = '正常' | '待退市' | '已退市';
+
+/** 资源管理 · 设备资源 */
+export interface DeviceResource {
+  id: string;
+  modelId: string;
+  modelName: string;
+  customerCode?: string;
+  team: string;
+  marketStatus?: DeviceMarketStatus;
+}
+
+/** 资源管理 · 自动化环境状态 */
+export type AutomationEnvStatus = '正常' | '异常';
+
+/** 资源管理 · 自动化环境 */
+export interface AutomationEnvironment {
+  id: string;
+  name: string;
+  team: string;
+  executorIp: string;
+  /** 环境检测异常提示（有值则列表展示红色感叹号 + Tooltip） */
+  executorCheckError?: string;
+  executorOs?: 'windows' | 'linux';
+  executorUsername?: string;
+  executorPassword?: string;
+  modelId?: string;
+  modelName: string;
+  deviceIp: string;
+  deviceCheckError?: string;
+  deviceUsername?: string;
+  devicePassword?: string;
+  deviceSerialNo?: string;
+  devicePlateNo?: string;
+  devicePhone?: string;
+  controlBoxVersion: string;
+  controlBoxCheckError?: string;
+  /** 控制盒 ID */
+  controlBoxId?: string;
+  camid?: string;
+  deviceStatus?: AutomationEnvStatus;
+  executorStatus?: AutomationEnvStatus;
+  controlBoxStatus?: AutomationEnvStatus;
+  userId?: string;
+  user: string;
+  status: AutomationEnvStatus;
 }
 
 export interface ProjectVersion {
@@ -31,15 +93,21 @@ export interface ProjectVersion {
   projectId: string;
   projectName?: string;
   inheritVersion?: string;
+  /** 整机项目继承版本时先选机型 */
+  inheritModel?: string;
   owner: string;
   startTime?: string;
   planReleaseDate: string;
   actualReleaseDate?: string | null;
-  status: '未发布' | '已发布' | '已召回';
+  status: PlatformVersionStatus | WholeMachineVersionStatus;
   caseCount: number;
   coverage: number;
   successRate: number;
   createdAt: string;
+  /** 整机项目 · 客户编码 */
+  customerCode?: string;
+  /** 整机项目 · 适配机型（多选，来自设备管理） */
+  adaptedModels?: string[];
   releaseNotes?: {
     newFeatures: string;
     cautions: string;
@@ -59,6 +127,9 @@ export type BurnFlag = '是' | '否';
 export type BurnStage = '贴片前烧录' | '贴片后烧录';
 export type SoftwareStatus = '正常' | '已下架' | '试产';
 
+/** 用例树节点类型：文件夹（可含子文件夹/套件）或测试套件（Robot Framework 用例容器） */
+export type CaseModuleKind = 'folder' | 'suite';
+
 /** 用例所属目录（模块）节点 */
 export interface CaseModule {
   id: string;
@@ -67,6 +138,8 @@ export interface CaseModule {
   name: string;
   /** 同级排序号（越小越靠前） */
   sort: number;
+  /** 整机 RF 模式：folder=文件夹，suite=测试套件；平台项目可省略（视为 folder） */
+  moduleKind?: CaseModuleKind;
 }
 
 /** 自动化用例（与 docs/spec/02-数据模型.md 对齐） */

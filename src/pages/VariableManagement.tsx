@@ -51,7 +51,7 @@ import { DynamicValueInput } from '@/components/DynamicValueInput';
 import { mockCaseModules, mockTestCases } from '@/mocks/data';
 import type { CaseModule, TestCase } from '@/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { versionDevPath } from '@/constants/routes';
+import { useVersionDevRoutes } from '@/hooks/useVersionDevRoutes';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 type LeftNode =
@@ -179,6 +179,7 @@ export function VariableManagement() {
   const { projectId = '', versionId = '' } = useParams<{ projectId: string; versionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toSegmentPath } = useVersionDevRoutes();
 
   const [globalVars, setGlobalVars] = useState<VariableRow[]>([
     { id: 'g-1', name: 'token', value: 'mock-token', description: '登录令牌' },
@@ -1290,7 +1291,7 @@ export function VariableManagement() {
           style={{ padding: 0 }}
           onClick={() =>
             navigate({
-              pathname: versionDevPath(projectId, versionId, 'cases'),
+              pathname: toSegmentPath(projectId, versionId, 'cases'),
               search: (() => {
                 const q = new URLSearchParams(location.search);
                 q.set('caseId', caseId);

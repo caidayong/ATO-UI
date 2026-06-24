@@ -1,0 +1,14 @@
+# SRS 原型截图 — 全局工程参数（换环境时改此文件）
+baseURL: http://localhost:5173
+viewport:
+  width: 1920
+  height: 1080
+format: png
+screenshotMode: viewport # viewport | fullPage
+maxShotsPerReq: 2
+devCommand: npm run dev
+devReadyPath: /tools/project-reports
+devStartupTimeoutMs: 90000
+stepDelayMs: 300
+navigationTimeoutMs: 30000
+actionTimeoutMs: 15000

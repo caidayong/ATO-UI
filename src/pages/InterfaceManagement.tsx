@@ -1,6 +1,6 @@
 /**
  * @page 接口管理
- * @version V1.0.7
+ * @version V1.0.8
  * @base 需求文档待补充，按截图实现
  * @changes
  *   - V1.0.0: 初始实现接口管理页面；左侧树形目录、右侧接口列表、支持搜索/批量操作/右键菜单
@@ -16,6 +16,7 @@
  *   - V1.0.7: 场景 Params 表列宽均分；Path 区去掉「添加」；Query 表底行「添加」增行、操作列启用/禁用开关（默认开）；
  *             点击「发送」自动弹出底部响应抽屉，支持展开/收起；抽屉挂载于右侧详情区容器内，宽度与详情页一致；
  *             右侧列表「接口名称」可点击，与左侧树选中接口一致进入「接口预览」详情
+ *   - V1.0.8: 修正全屏 Card 高度计算（margin:-24 抵消 padding 后应用 PAGE_BLEED_HEIGHT），消除页面底部大块空白
  */
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
@@ -77,6 +78,7 @@ import {
   mockProjects,
   mockTeams,
 } from '@/mocks/data';
+import { PAGE_BLEED_HEIGHT } from '@/constants/ui';
 
 const { Option } = Select;
 
@@ -1674,8 +1676,8 @@ export function InterfaceManagement() {
   // === 渲染 ===
   return (
     <Card
-      bodyStyle={{ padding: 0, height: 'calc(100vh - 140px)', minHeight: 600 }}
-      style={{ margin: -24, borderRadius: 0 }}
+      styles={{ body: { padding: 0, height: '100%' } }}
+      style={{ margin: -24, borderRadius: 0, height: PAGE_BLEED_HEIGHT, minHeight: 600 }}
     >
       <div style={{ display: 'flex', height: '100%', minWidth: 0 }}>
         {/* 左侧树形目录 */}

@@ -1,6 +1,6 @@
 /**
  * @page 项目管理
- * @version V1.0.3
+ * @version V1.0.4
  * @base ATO_V1.0.0-页面需求与交互规格.md 第 4.2 节
  * @changes
  *   - V1.0.0: 初始实现
@@ -8,6 +8,7 @@
  *   - V1.0.1: 自动化类型新增「设备自动化」（Tag 配色 cyan）；mock 项目名称对齐真实业务（S17-3.0/业务中台/FT-3.0/出租/校车/海外货运）
  *   - V1.0.2: 卡片头部补充「项目类型」Tag（平台项目=geekblue / 整机项目=gold），与自动化类型并排展示
  *   - V1.0.3: 卡片头部两枚 Tag 改为左右对齐布局（自动化类型左、项目类型右）
+ *   - V1.0.4: 新建/编辑弹窗「项目类型」置顶且默认「平台项目」；整机项目隐藏「自动化类型」并固定为 Robot Framework
  */
 
 import { useState, useMemo } from 'react';
@@ -45,6 +46,8 @@ import type { Project } from '@/types';
 const { Title } = Typography;
 const { Option } = Select;
 const STATUS_OK_COLOR = '#52c41a';
+const WHOLE_MACHINE_AUTO_TYPE = 'Robot Framework' as const;
+const DEFAULT_PROJECT_TYPE = '平台项目' as const;
 
 export function ProjectList() {
   const [projects, setProjects] = useState<Project[]>(mockProjects);
@@ -53,6 +56,8 @@ export function ProjectList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [form] = Form.useForm();
+  const projectType = Form.useWatch('projectType', form);
+  const isWholeMachineProject = projectType === '整机项目';
 
   // 筛选项目
   const filteredProjects = useMemo(() => {
@@ -69,6 +74,7 @@ export function ProjectList() {
   const handleAdd = () => {
     setEditingProject(null);
     form.resetFields();
+    form.setFieldsValue({ projectType: DEFAULT_PROJECT_TYPE });
     setIsModalOpen(true);
   };
 
@@ -93,6 +99,12 @@ export function ProjectList() {
   // 提交表单
   const handleSubmit = () => {
     form.validateFields().then((values) => {
+      const submitValues = {
+        ...values,
+        autoType:
+          values.projectType === '整机项目' ? WHOLE_MACHINE_AUTO_TYPE : values.autoType,
+      };
+
       if (editingProject) {
         // 编辑
         setProjects((prev) =>
@@ -100,7 +112,7 @@ export function ProjectList() {
             p.id === editingProject.id
               ? {
                   ...p,
-                  ...values,
+                  ...submitValues,
                   updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
                 }
               : p
@@ -111,7 +123,7 @@ export function ProjectList() {
         // 新建
         const newProject: Project = {
           id: String(Date.now()),
-          ...values,
+          ...submitValues,
           createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
           updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
         };
@@ -122,11 +134,22 @@ export function ProjectList() {
     });
   };
 
+  const handleProjectTypeChange = (value: Project['projectType']) => {
+    if (value === '整机项目') {
+      form.setFieldValue('autoType', WHOLE_MACHINE_AUTO_TYPE);
+      return;
+    }
+    if (form.getFieldValue('autoType') === WHOLE_MACHINE_AUTO_TYPE) {
+      form.setFieldValue('autoType', undefined);
+    }
+  };
+
   // 获取自动化类型标签颜色
   const getAutoTypeColor = (type: string) => {
     if (type === '接口自动化') return 'blue';
     if (type === 'UI自动化') return 'purple';
     if (type === '设备自动化') return 'cyan';
+    if (type === WHOLE_MACHINE_AUTO_TYPE) return 'orange';
     return 'default';
   };
 
@@ -298,18 +321,32 @@ export function ProjectList() {
           form={form}
           layout="vertical"
           style={{ marginTop: 16 }}
+          initialValues={{ projectType: DEFAULT_PROJECT_TYPE }}
         >
           <Form.Item
-            name="autoType"
-            label="自动化类型"
-            rules={[{ required: true, message: '请选择自动化类型' }]}
+            name="projectType"
+            label="项目类型"
+            rules={[{ required: true, message: '请选择项目类型' }]}
           >
-            <Select placeholder="请选择">
-              <Option value="接口自动化">接口自动化</Option>
-              <Option value="UI自动化">UI自动化</Option>
-              <Option value="设备自动化">设备自动化</Option>
+            <Select placeholder="请选择" onChange={handleProjectTypeChange}>
+              <Option value="平台项目">平台项目</Option>
+              <Option value="整机项目">整机项目</Option>
             </Select>
           </Form.Item>
+
+          {!isWholeMachineProject && (
+            <Form.Item
+              name="autoType"
+              label="自动化类型"
+              rules={[{ required: true, message: '请选择自动化类型' }]}
+            >
+              <Select placeholder="请选择">
+                <Option value="接口自动化">接口自动化</Option>
+                <Option value="UI自动化">UI自动化</Option>
+                <Option value="设备自动化">设备自动化</Option>
+              </Select>
+            </Form.Item>
+          )}
 
           <Form.Item
             name="team"
@@ -335,17 +372,6 @@ export function ProjectList() {
             extra="同团队内项目名称需唯一"
           >
             <Input placeholder="示例：S17-3.0" />
-          </Form.Item>
-
-          <Form.Item
-            name="projectType"
-            label="项目类型"
-            rules={[{ required: true, message: '请选择项目类型' }]}
-          >
-            <Select placeholder="请选择">
-              <Option value="平台项目">平台项目</Option>
-              <Option value="整机项目">整机项目</Option>
-            </Select>
           </Form.Item>
 
           <Form.Item name="region" label="项目所在区域">

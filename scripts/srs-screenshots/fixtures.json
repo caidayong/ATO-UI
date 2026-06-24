@@ -1,0 +1,14 @@
+{
+  "_comment": "全库统一截图夹具：一律取 Mock 中已有数据的第一个；变更 Mock 时请同步更新",
+  "projectId": "1",
+  "versionId": "1",
+  "platformTaskId": "15",
+  "testRunId": "RUN-20260330001",
+  "dailyReportConfigId": "dr-001",
+  "dailyReportConfigId2": "dr-002",
+  "dailyReportName": "支付线-SIT-日报",
+  "weeklyReportRowId": "wr-t-qa-1-current-001",
+  "caseName": "创建订单-正常流",
+  "caseModuleName": "下单流程",
+  "caseId": "tc-1"
+}

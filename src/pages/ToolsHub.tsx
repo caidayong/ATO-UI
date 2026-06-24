@@ -4,6 +4,7 @@
  * @base docs/spec/01-信息架构与路由.md §4；docs/prd/V1.0.1-P6/ATO_V1.0.1-P6-页面需求与交互规格.md §1.1
  * @changes
  *   - V1.0.1-P6: 测试工具 Hub 改为卡片入口（项目日&周报、市场缺陷分析），替代「测试日报」残留入口
+ *   - V1.0.1-P6: 2026-06-03 UI 验收通过
  */
 import { Card, Col, Row, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';

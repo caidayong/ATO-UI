@@ -16,6 +16,7 @@
  *   - V1.0.1-P6: 周报「产品」改为文本输入；「测试人员」改为多选下拉
  *   - V1.0.1-P6: 周报 Tab 右上角统计/设置图标；设置弹窗团队责任人列表 + 时间配置
  *   - V1.0.1-P6: 周报设置团队去重；检测/发送时间改为每周星期几+时分秒
+ *   - V1.0.1-P6: 2026-06-03 UI/交互验收通过（见 PRD §0.2、变更记录）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {

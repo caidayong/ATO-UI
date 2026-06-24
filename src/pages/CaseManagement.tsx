@@ -1,6 +1,6 @@
 /**
  * @page 用例管理
- * @version V1.0.47
+ * @version V1.0.55
  * @base docs/spec/04-页面契约.md § 页面 5（用例管理）；ATO_V1.0.0-页面需求与交互规格.md 第 4.5 节（用例管理）
  * @changes
  *   - V1.0.0: 新窗口内 3:7 分栏；目录树（右键菜单占位）；用例列表；用例详情多 Tab；步骤简版编辑器（Mock 状态）
@@ -34,6 +34,7 @@
  *   - V1.0.28: 调用函数步骤 Mock 数据补齐——按步骤标题关键字（幂等/订单号/签名/手机/时间戳/金额）命中预置样本（如 uuid(len=32)、md5(text=...)、random_phone(prefix="138")），未命中按索引轮换 uuid/generate_order_no/now_ms 兜底；返回值、变量提取、断言同步联动 mock。
  *   - V1.0.29: 抽屉中的步骤详情渲染抽取到 src/components/CaseDebugDetail.tsx（DebugStepResultHeader / DebugStepDetailTabs / DebugSection / Extracted / Assertions），供「测试报告」用例详情抽屉复用；本页 UI 行为保持一致。
  *   - V1.0.30: 接口请求步骤 URL 行移除 IP+端口输入（与顶部运行环境一致）；详情顶栏环境选择前增加「运行环境」文案。
+ *   - V1.0.31: 整机版本开发运行环境下拉改为资源管理 · 自动化环境名称
  *   - V1.0.31: 步骤详情「断言」Tab 每条断言行末尾新增「失败中断」复选框（默认选中）；取消选中表示断言失败后继续执行后续步骤。
  *   - V1.0.32: 步骤栏「添加步骤」行新增「复制步骤」「粘贴步骤」；复制当前选中步骤完整配置至剪贴板，可跨用例详情页粘贴为新增步骤。
  *   - V1.0.33: 「添加步骤」改为主色按钮；步骤栏与详情栏支持鼠标拖拽调整宽度，默认宽度可完整展示底部三按钮。
@@ -51,6 +52,14 @@
  *   - V1.0.45: 用例列表工具栏增加「标签」：勾选后高亮可点，弹出新增/移除模式与标签多选，确认后批量更新选中用例标签（Mock）。
  *   - V1.0.46: 步骤栏行首增加复选框，支持多选后「复制步骤」；剪贴板可跨用例「粘贴步骤」批量追加（按列表顺序）。
  *   - V1.0.47: 步骤栏标题「步骤」前增加勾选框，勾选/取消即全选或清空当前用例全部步骤（含 If/For 子步骤）。
+ *   - V1.0.48: 整机 RF 用例树：文件夹与测试套件分层，套件独立图标，用例仅挂套件；文件夹菜单改为「添加测试套件」。
+ *   - V1.0.49: 左侧树顶部「+」菜单固定为：添加测试用例、添加目录、导出测试用例。
+ *   - V1.0.50: 整机「添加测试用例」弹窗：自定义添加必填「所属套件」；移除接口场景 Tab；YAML 导入改为 Robot 文件导入。
+ *   - V1.0.51: 整机自定义添加恢复「所属模块」，与「所属套件」并存；套件随所选模块联动过滤。
+ *   - V1.0.52: 整机自定义添加「所属模块」表单项文案改为「所属目录」。
+ *   - V1.0.53: 目录列表右侧新增「调试报告」Tab（位于「标签/分组」之后）；目录「调试运行」提交 Mock 任务并自动切至该 Tab，运行中展示「用例运行中，请稍后」，完成后展示目录用例运行结果（布局参考测试运行报告）；点击用例名称右侧抽屉展示运行详情；各目录调试状态独立记忆，切换目录/用例页再返回不影响进行中或已完成报告。
+ *   - V1.0.54: 调试报告 Tab 增加「再次运行失败/异常用例」按钮；仅重跑失败/异常用例，完成后局部覆盖对应行结果，已成功用例保持不变。
+ *   - V1.0.55: 「调试运行」先弹窗选择运行环境与任务类型（临时/持久，默认临时）；临时任务报告仅在当前「调试报告」Tab 展示；持久任务写入「测试运行」并提示跳转；调试报告空态居中增加「调试运行」按钮。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -66,6 +75,7 @@ import {
   Empty,
   Form,
   Input,
+  List,
   InputNumber,
   Modal,
   Popover,
@@ -81,6 +91,7 @@ import {
   Typography,
   Switch,
   Tooltip,
+  Radio,
   Segmented,
   message,
 } from 'antd';
@@ -88,6 +99,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
 import {
+  AppstoreOutlined,
   DownloadOutlined,
   ArrowDownOutlined,
   CheckCircleOutlined,
@@ -103,6 +115,7 @@ import {
   HolderOutlined,
   MoreOutlined,
   PlusOutlined,
+  ReloadOutlined,
   SearchOutlined,
   StopOutlined,
   SwapOutlined,
@@ -136,13 +149,20 @@ import {
   mockTestCases,
   mockVersions,
 } from '@/mocks/data';
-import type { CaseModule, CaseResult, CaseStep, CaseStepType, TestCase } from '@/types';
+import type { CaseModule, CaseModuleKind, CaseResult, CaseStep, CaseStepType, TestCase } from '@/types';
 import { CASE_STEP_TYPES } from '@/types';
 import { DynamicValueInput } from '@/components/DynamicValueInput';
+import { FormModal } from '@/components/layout/FormModal';
+import { useRunEnvironmentOptions } from '@/hooks/useRunEnvironmentOptions';
+import { appendVersionRunTask } from '@/utils/versionRunTasksBridge';
 import {
   buildCaseDebugResults,
   type DebugStepResult,
 } from '@/constants/caseDebugMockLog';
+import {
+  REPORT_CASE_DETAIL_BY_ID,
+  type CaseRunDetail,
+} from '@/constants/reportCaseDetailMock';
 import {
   DebugStepDetailTabs,
   DebugStepResultHeader,
@@ -245,6 +265,132 @@ type FunctionAssertRow = {
 };
 type DbType = 'MariaDb' | 'ClickHouse';
 
+type CaseListTabKey = 'dir' | 'module' | 'tagGroup' | 'debugReport';
+type DebugReportStatusFilter = 'all' | 'success' | 'failed' | 'abnormal' | 'skipped';
+type DebugReportResult = '成功' | '失败' | '异常' | '跳过';
+
+type DebugReportCaseRow = {
+  id: string;
+  name: string;
+  tags: string[];
+  module: string;
+  moduleId: string;
+  result: DebugReportResult;
+};
+
+type ModuleDebugReportState = {
+  phase: 'idle' | 'running' | 'done';
+  envKey: string;
+  env: string;
+  rows: DebugReportCaseRow[];
+  reportTreeModuleKey: string;
+  statusFilter: DebugReportStatusFilter;
+};
+
+type DebugRunTaskType = 'temporary' | 'persistent';
+
+type DebugRunDialogContext = {
+  moduleId: string;
+  targetCaseIds?: string[];
+};
+
+const DEBUG_REPORT_STATUS_META: Record<
+  Exclude<DebugReportStatusFilter, 'all'>,
+  { color: string; label: string }
+> = {
+  success: { color: '#52c41a', label: '成功' },
+  failed: { color: '#ff4d4f', label: '失败' },
+  abnormal: { color: '#faad14', label: '异常' },
+  skipped: { color: '#d9d9d9', label: '跳过' },
+};
+
+const PLATFORM_DEBUG_ENV_LABEL: Record<string, string> = {
+  DEV: 'DEV 测试环境',
+  SIT: 'SIT测试环境',
+  UAT: 'UAT 测试环境',
+  PRD: 'PRD 测试环境',
+};
+
+function formatDebugReportEnvLabel(envKey: string, isDevice: boolean): string {
+  if (isDevice) return envKey;
+  return PLATFORM_DEBUG_ENV_LABEL[envKey] ?? `${envKey}测试环境`;
+}
+
+function nowTaskTimeText(): string {
+  return new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+}
+
+function mapCaseResultToDebugReportResult(r: CaseResult): DebugReportResult {
+  if (r === '通过') return '成功';
+  if (r === '失败') return '失败';
+  if (r === '警告') return '异常';
+  return '跳过';
+}
+
+function buildDebugReportRows(
+  targetCases: TestCase[],
+  moduleNameById: Record<string, string>
+): DebugReportCaseRow[] {
+  return targetCases.map((c, idx) => {
+    let result = mapCaseResultToDebugReportResult(c.result);
+    if (c.result === '未运行') {
+      const pool: DebugReportResult[] = ['成功', '成功', '失败', '异常', '跳过'];
+      result = pool[idx % pool.length];
+    }
+    return {
+      id: c.id,
+      name: c.name,
+      tags: c.tags ?? [],
+      module: moduleNameById[c.moduleId] ?? c.moduleId,
+      moduleId: c.moduleId,
+      result,
+    };
+  });
+}
+
+/** 失败/异常用例重跑 Mock：偏向产出新结果以便演示局部覆盖 */
+function buildDebugReportRerunRows(
+  targetCases: TestCase[],
+  moduleNameById: Record<string, string>
+): DebugReportCaseRow[] {
+  const pool: DebugReportResult[] = ['成功', '成功', '成功', '失败', '异常'];
+  return targetCases.map((c, idx) => ({
+    id: c.id,
+    name: c.name,
+    tags: c.tags ?? [],
+    module: moduleNameById[c.moduleId] ?? c.moduleId,
+    moduleId: c.moduleId,
+    result: pool[idx % pool.length],
+  }));
+}
+
+function mergeDebugReportRerunRows(
+  existingRows: DebugReportCaseRow[],
+  rerunCaseIds: string[],
+  newRows: DebugReportCaseRow[]
+): DebugReportCaseRow[] {
+  const newById = new Map(newRows.map((r) => [r.id, r]));
+  return existingRows.map((row) => {
+    if (rerunCaseIds.includes(row.id) && newById.has(row.id)) {
+      return newById.get(row.id)!;
+    }
+    return row;
+  });
+}
+
+type ModuleDebugRunMode = 'full' | 'failedAbnormalOnly';
+
+function calcDebugReportStatusCounts(rows: DebugReportCaseRow[]) {
+  const counts = { total: rows.length, success: 0, failed: 0, abnormal: 0, skipped: 0 };
+  rows.forEach((r) => {
+    if (r.result === '成功') counts.success += 1;
+    else if (r.result === '失败') counts.failed += 1;
+    else if (r.result === '异常') counts.abnormal += 1;
+    else counts.skipped += 1;
+  });
+  return counts;
+}
+
 /** 断言 Tab 表格列宽与间距（接口请求 / 调用函数·数据库操作 两套） */
 const ASSERT_API_GRID_COLUMNS = 'minmax(0,1fr) 108px minmax(0,1fr) 128px 52px minmax(0,1fr) 84px 28px';
 const ASSERT_FN_DB_GRID_COLUMNS = 'minmax(0,1fr) 100px minmax(0,1fr) 112px 52px minmax(0,1fr) 84px 28px';
@@ -344,18 +490,6 @@ const TREE_PANE_MIN_WIDTH_PX =
   TREE_SEARCH_INPUT_WIDTH_PX + 8 + 32 + 24;
 const TREE_PANE_DEFAULT_WIDTH_PX = 300;
 
-const ENV_DEFAULT_HOST: Record<string, string> = {
-  DEV: '10.10.10.10:18080',
-  SIT: '192.168.143.134:21250',
-  UAT: '172.16.20.21:28080',
-  PRD: 'api.example.com:443',
-};
-const ENV_DEFAULT_PROTOCOL: Record<string, 'http' | 'https'> = {
-  DEV: 'http',
-  SIT: 'http',
-  UAT: 'http',
-  PRD: 'https',
-};
 const DEFAULT_PATH_PARAMS: RequestParamRow[] = [
   {
     id: 'path-server-ip',
@@ -413,16 +547,54 @@ function collectDescendantModuleIds(rootId: string, modules: CaseModule[]): Set<
   return set;
 }
 
+function getModuleKind(m: CaseModule | undefined): CaseModuleKind {
+  return m?.moduleKind === 'suite' ? 'suite' : 'folder';
+}
+
+function isSuiteModule(m: CaseModule | undefined): boolean {
+  return getModuleKind(m) === 'suite';
+}
+
+function collectDescendantSuiteIds(rootId: string, modules: CaseModule[]): Set<string> {
+  const root = modules.find((m) => m.id === rootId);
+  const set = new Set<string>();
+  if (!root) return set;
+  if (isSuiteModule(root)) {
+    set.add(rootId);
+    return set;
+  }
+  const walk = (pid: string) => {
+    modules
+      .filter((m) => m.parentId === pid)
+      .forEach((m) => {
+        if (isSuiteModule(m)) set.add(m.id);
+        else walk(m.id);
+      });
+  };
+  walk(rootId);
+  return set;
+}
+
 function filterCasesInModuleTree(
   moduleId: string,
   modules: CaseModule[],
-  cases: TestCase[]
+  cases: TestCase[],
+  rfMode = false
 ): TestCase[] {
-  const ids = collectDescendantModuleIds(moduleId, modules);
-  return cases.filter((c) => ids.has(c.moduleId));
+  if (!rfMode) {
+    const ids = collectDescendantModuleIds(moduleId, modules);
+    return cases.filter((c) => ids.has(c.moduleId));
+  }
+  const suiteIds = collectDescendantSuiteIds(moduleId, modules);
+  return cases.filter((c) => suiteIds.has(c.moduleId));
 }
 
-function buildTreeData(modules: CaseModule[], cases: TestCase[], versionId: string): DataNode[] {
+function buildTreeData(
+  modules: CaseModule[],
+  cases: TestCase[],
+  versionId: string,
+  rfMode = false
+): DataNode[] {
   const vmods = modules.filter((m) => m.versionId === versionId);
   const vcases = cases.filter((c) => c.versionId === versionId);
 
@@ -430,22 +602,25 @@ function buildTreeData(modules: CaseModule[], cases: TestCase[], versionId: stri
     const childMods = vmods
       .filter((m) => m.parentId === parentId)
       .sort((a, b) => a.sort - b.sort)
-      .map((m) => ({
-        key: modKey(m.id),
-        title: m.name,
-        children: [
-          ...build(m.id),
-          ...vcases
-            .filter((c) => c.moduleId === m.id)
-            .map(
-              (c): DataNode => ({
-                key: caseKey(c.id),
-                title: c.name,
-                isLeaf: true,
-              })
-            ),
-        ],
-      }));
+      .map((m) => {
+        const caseNodes =
+          !rfMode || isSuiteModule(m)
+            ? vcases
+                .filter((c) => c.moduleId === m.id)
+                .map(
+                  (c): DataNode => ({
+                    key: caseKey(c.id),
+                    title: c.name,
+                    isLeaf: true,
+                  })
+                )
+            : [];
+        return {
+          key: modKey(m.id),
+          title: m.name,
+          children: [...build(m.id), ...caseNodes],
+        };
+      });
     return childMods;
   };
 
@@ -502,6 +677,344 @@ function buildModuleOnlyTreeData(modules: CaseModule[], versionId: string): Modu
         };
       });
   return build(null);
+}
+
+/** 目录「调试报告」Tab：运行中 / 结果列表（布局参考测试运行 · 测试报告） */
+function ModuleDebugReportPanel({
+  reportState,
+  ownerModuleId,
+  ownerModuleName,
+  versionModules,
+  onRerun,
+  onRerunFailed,
+  onStartDebugRun,
+  onStatusFilterChange,
+  onReportTreeModuleKeyChange,
+  onCaseNameClick,
+  selectedCaseId,
+}: {
+  reportState: ModuleDebugReportState;
+  ownerModuleId: string;
+  ownerModuleName: string;
+  versionModules: CaseModule[];
+  onRerun: () => void;
+  onRerunFailed: () => void;
+  onStartDebugRun: () => void;
+  onStatusFilterChange: (filter: DebugReportStatusFilter) => void;
+  onReportTreeModuleKeyChange: (moduleKey: string) => void;
+  onCaseNameClick: (caseId: string) => void;
+  selectedCaseId: string;
+}) {
+  const subtreeModules = useMemo(() => {
+    const allowed = collectDescendantModuleIds(ownerModuleId, versionModules);
+    return versionModules.filter((m) => allowed.has(m.id)).sort((a, b) => a.sort - b.sort);
+  }, [ownerModuleId, versionModules]);
+
+  const reportTreeData = useMemo(() => {
+    const build = (parentId: string | null): DataNode[] => {
+      const children = subtreeModules
+        .filter((m) => m.parentId === parentId)
+        .slice()
+        .sort((a, b) => a.sort - b.sort);
+      return children.map((m) => ({
+        key: m.id,
+        title: m.name,
+        children: build(m.id),
+      }));
+    };
+    const rootChildren = build(ownerModuleId);
+    return [
+      {
+        key: ownerModuleId,
+        title: ownerModuleName,
+        children: rootChildren.length ? rootChildren : undefined,
+      },
+    ];
+  }, [ownerModuleId, ownerModuleName, subtreeModules]);
+
+  const reportExpandedKeys = useMemo(
+    () => subtreeModules.map((m) => m.id).concat(ownerModuleId),
+    [ownerModuleId, subtreeModules]
+  );
+
+  const effectiveTreeKey = reportState.reportTreeModuleKey || ownerModuleId;
+
+  const allowedModuleIds = useMemo(() => {
+    if (!effectiveTreeKey) return new Set<string>([ownerModuleId]);
+    return collectDescendantModuleIds(effectiveTreeKey, versionModules);
+  }, [effectiveTreeKey, ownerModuleId, versionModules]);
+
+  const treeScopedRows = useMemo(
+    () => reportState.rows.filter((r) => allowedModuleIds.has(r.moduleId)),
+    [allowedModuleIds, reportState.rows]
+  );
+
+  const statusCounts = useMemo(() => calcDebugReportStatusCounts(treeScopedRows), [treeScopedRows]);
+
+  const filteredRows = useMemo(() => {
+    if (reportState.statusFilter === 'all') return treeScopedRows;
+    const target: DebugReportResult =
+      reportState.statusFilter === 'success'
+        ? '成功'
+        : reportState.statusFilter === 'failed'
+          ? '失败'
+          : reportState.statusFilter === 'abnormal'
+            ? '异常'
+            : '跳过';
+    return treeScopedRows.filter((r) => r.result === target);
+  }, [reportState.statusFilter, treeScopedRows]);
+
+  const failedAbnormalCount = useMemo(
+    () => reportState.rows.filter((r) => r.result === '失败' || r.result === '异常').length,
+    [reportState.rows]
+  );
+
+  const reportColumns: ColumnsType<DebugReportCaseRow> = [
+    {
+      title: '用例名称',
+      dataIndex: 'name',
+      render: (name: string, row) => (
+        <Typography.Link
+          className="debug-report-case-name-link"
+          onClick={(e) => {
+            e.preventDefault();
+            onCaseNameClick(row.id);
+          }}
+          title="点击查看用例运行详情"
+          style={{ display: 'inline-block', maxWidth: 260, color: '#1677ff' }}
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              maxWidth: 260,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              verticalAlign: 'middle',
+              color: 'inherit',
+            }}
+          >
+            {name}
+          </span>
+        </Typography.Link>
+      ),
+    },
+    { title: '用例ID', dataIndex: 'id', width: 110 },
+    {
+      title: '标签',
+      dataIndex: 'tags',
+      width: 120,
+      render: (tags: string[]) => (
+        <Space size={4} wrap>
+          {tags.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-'}
+        </Space>
+      ),
+    },
+    { title: '所属模块', dataIndex: 'module', width: 130 },
+    {
+      title: '运行结果',
+      dataIndex: 'result',
+      width: 90,
+      render: (result: DebugReportResult) => (
+        <Space size={6}>
+          <span
+            style={{
+              display: 'inline-block',
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background:
+                result === '成功'
+                  ? '#52c41a'
+                  : result === '失败'
+                    ? '#ff4d4f'
+                    : result === '异常'
+                      ? '#faad14'
+                      : '#d9d9d9',
+            }}
+          />
+          <span>{result}</span>
+        </Space>
+      ),
+    },
+  ];
+
+  if (reportState.phase === 'idle') {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 360,
+        }}
+      >
+        <Space direction="vertical" align="center" size="middle">
+          <Empty description="暂无调试报告" />
+          <Button type="primary" icon={<CheckCircleOutlined />} onClick={onStartDebugRun}>
+            调试运行
+          </Button>
+        </Space>
+      </div>
+    );
+  }
+
+  if (reportState.phase === 'running') {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 360,
+        }}
+      >
+        <Space direction="vertical" align="center" size="middle">
+          <Spin size="large" />
+          <Typography.Text type="secondary">用例运行中，请稍后</Typography.Text>
+        </Space>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, paddingBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Typography.Text type="secondary">
+          运行环境：<Typography.Text>{reportState.env}</Typography.Text>
+        </Typography.Text>
+        <Space wrap>
+          <Button type="primary" icon={<ReloadOutlined />} onClick={onRerun}>
+            再次运行
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            disabled={failedAbnormalCount === 0}
+            onClick={onRerunFailed}
+          >
+            再次运行失败/异常用例
+          </Button>
+        </Space>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '240px 1fr',
+          gap: 12,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        <div style={{ overflow: 'hidden', borderRight: '1px solid #f0f0f0', paddingRight: 8 }}>
+          <Tree
+            blockNode
+            selectedKeys={[effectiveTreeKey]}
+            defaultExpandedKeys={reportExpandedKeys}
+            treeData={reportTreeData}
+            onSelect={(keys) => {
+              const k = keys[0];
+              if (typeof k === 'string') onReportTreeModuleKeyChange(k);
+            }}
+            height={420}
+          />
+        </div>
+
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              marginBottom: 12,
+            }}
+          >
+            {(['all', 'success', 'failed', 'abnormal', 'skipped'] as DebugReportStatusFilter[]).map(
+              (key) => {
+                const meta =
+                  key === 'all'
+                    ? { color: '#1677ff', label: '全部' }
+                    : DEBUG_REPORT_STATUS_META[key as Exclude<DebugReportStatusFilter, 'all'>];
+                const count =
+                  key === 'all'
+                    ? statusCounts.total
+                    : key === 'success'
+                      ? statusCounts.success
+                      : key === 'failed'
+                        ? statusCounts.failed
+                        : key === 'abnormal'
+                          ? statusCounts.abnormal
+                          : statusCounts.skipped;
+                return (
+                  <Button
+                    key={key}
+                    type={reportState.statusFilter === key ? 'primary' : 'default'}
+                    size="small"
+                    onClick={() => onStatusFilterChange(key)}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: meta.color,
+                        marginRight: 6,
+                        verticalAlign: 'middle',
+                      }}
+                    />
+                    {meta.label} {count}
+                  </Button>
+                );
+              }
+            )}
+          </div>
+
+          <Table
+            size="small"
+            rowKey="id"
+            columns={reportColumns}
+            dataSource={filteredRows}
+            rowClassName={(record) =>
+              record.id === selectedCaseId ? 'debug-report-case-selected-row' : ''
+            }
+            onRow={(record) => ({
+              onClick: () => onCaseNameClick(record.id),
+            })}
+            pagination={{ pageSize: 20, showSizeChanger: true }}
+            locale={{ emptyText: <Empty description="暂无报告数据" /> }}
+          />
+        </div>
+      </div>
+
+      <style>
+        {`
+          .debug-report-case-selected-row td {
+            background: #e6f4ff !important;
+          }
+          .debug-report-case-name-link {
+            color: #1677ff !important;
+            cursor: pointer;
+            text-decoration: none;
+          }
+          .debug-report-case-name-link:hover {
+            text-decoration: underline;
+          }
+        `}
+      </style>
+    </div>
+  );
 }
 
 /** 调试运行结果右侧抽屉：按步骤类型分 Tab 展示运行详情 */
@@ -563,6 +1076,13 @@ function CaseDebugStepDrawer({
 export function CaseManagement() {
   const { versionId = '' } = useParams<{ projectId: string; versionId: string }>();
   const location = useLocation();
+  const {
+    options: runEnvOptions,
+    defaultEnv,
+    resolveEnvHost,
+    resolveEnvProtocol,
+    isDeviceVersionDev,
+  } = useRunEnvironmentOptions();
 
   const [modules, setModules] = useState<CaseModule[]>(() => [...mockCaseModules]);
   const [cases, setCases] = useState<TestCase[]>(() => [...mockTestCases]);
@@ -634,7 +1154,20 @@ export function CaseManagement() {
   const [treeKeyword, setTreeKeyword] = useState('');
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [caseSearch, setCaseSearch] = useState('');
-  const [caseListTab, setCaseListTab] = useState<'dir' | 'module' | 'tagGroup'>('dir');
+  const [caseListTab, setCaseListTab] = useState<CaseListTabKey>('dir');
+  /** 各目录独立记忆右侧 Tab（含调试报告），切换目录后恢复 */
+  const [caseListTabByModuleId, setCaseListTabByModuleId] = useState<Record<string, CaseListTabKey>>({});
+  /** 目录批量调试报告：按 moduleId 隔离，切换目录不影响各目录运行态 */
+  const [moduleDebugReportByModuleId, setModuleDebugReportByModuleId] = useState<
+    Record<string, ModuleDebugReportState>
+  >({});
+  const moduleDebugTimerRef = useRef<Record<string, number>>({});
+  const [debugReportDrawerOpen, setDebugReportDrawerOpen] = useState(false);
+  const [debugReportSelectedCaseId, setDebugReportSelectedCaseId] = useState('');
+  const [debugReportDrawerStepIdx, setDebugReportDrawerStepIdx] = useState(0);
+  const [debugRunModalOpen, setDebugRunModalOpen] = useState(false);
+  const [debugRunContext, setDebugRunContext] = useState<DebugRunDialogContext | null>(null);
+  const [debugRunForm] = Form.useForm<{ env: string; taskType: DebugRunTaskType }>();
   /** 目录「标签/分组」Tab：分组 id（单选）与标签名列表（Mock 仅存前端） */
   const [moduleTagGroupByModuleId, setModuleTagGroupByModuleId] = useState<
     Record<string, { groupId?: string; tags: string[] }>
@@ -710,6 +1243,275 @@ export function CaseManagement() {
     []
   );
 
+  const moduleNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    modules.forEach((m) => {
+      map[m.id] = m.name;
+    });
+    return map;
+  }, [modules]);
+
+  const versionModules = useMemo(
+    () => modules.filter((m) => m.versionId === versionId).slice().sort((a, b) => a.sort - b.sort),
+    [modules, versionId]
+  );
+
+  const resolveRunCasesForModule = useCallback(
+    (moduleId: string, targetCaseIds?: string[]) => {
+      const moduleCases = filterCasesInModuleTree(moduleId, modules, cases, isDeviceVersionDev);
+      if (targetCaseIds && targetCaseIds.length > 0) {
+        return moduleCases.filter((c) => targetCaseIds.includes(c.id));
+      }
+      return moduleCases;
+    },
+    [cases, isDeviceVersionDev, modules]
+  );
+
+  const patchModuleDebugReport = useCallback(
+    (moduleId: string, patch: Partial<ModuleDebugReportState>) => {
+      setModuleDebugReportByModuleId((prev) => {
+        const cur = prev[moduleId] ?? {
+          phase: 'idle' as const,
+          envKey: defaultEnv,
+          env: formatDebugReportEnvLabel(defaultEnv, isDeviceVersionDev),
+          rows: [],
+          reportTreeModuleKey: moduleId,
+          statusFilter: 'all' as const,
+        };
+        return { ...prev, [moduleId]: { ...cur, ...patch } };
+      });
+    },
+    [defaultEnv, isDeviceVersionDev]
+  );
+
+  const switchCaseListTab = useCallback((tab: CaseListTabKey, moduleId: string | null) => {
+    setCaseListTab(tab);
+    if (moduleId) {
+      setCaseListTabByModuleId((prev) => ({ ...prev, [moduleId]: tab }));
+    }
+  }, []);
+
+  /**
+   * 执行临时调试运行：报告写入当前目录「调试报告」Tab（Mock 不入库）。
+   */
+  const executeTemporaryModuleDebugRun = useCallback(
+    (
+      moduleId: string,
+      envKey: string,
+      options?: { targetCaseIds?: string[]; mode?: ModuleDebugRunMode }
+    ) => {
+      const mode = options?.mode ?? 'full';
+      const moduleCases = filterCasesInModuleTree(moduleId, modules, cases, isDeviceVersionDev);
+
+      let runCases: TestCase[];
+      let rerunCaseIds: string[] = [];
+      let effectiveEnvKey = envKey;
+
+      if (mode === 'failedAbnormalOnly') {
+        const report = moduleDebugReportByModuleId[moduleId];
+        if (!report || report.phase !== 'done' || report.rows.length === 0) {
+          message.warning('暂无已完成的调试报告，无法重跑失败/异常用例');
+          return;
+        }
+        effectiveEnvKey = report.envKey || envKey;
+        rerunCaseIds = report.rows
+          .filter((r) => r.result === '失败' || r.result === '异常')
+          .map((r) => r.id);
+        if (rerunCaseIds.length === 0) {
+          message.info('当前没有失败或异常用例');
+          return;
+        }
+        const idSet = new Set(rerunCaseIds);
+        runCases = moduleCases.filter((c) => idSet.has(c.id));
+        if (runCases.length === 0) {
+          message.warning('未找到可重跑的失败/异常用例');
+          return;
+        }
+      } else {
+        const targetCaseIds = options?.targetCaseIds;
+        runCases =
+          targetCaseIds && targetCaseIds.length > 0
+            ? moduleCases.filter((c) => targetCaseIds.includes(c.id))
+            : moduleCases;
+      }
+
+      if (runCases.length === 0) {
+        message.warning('当前目录下没有可调试运行的用例');
+        return;
+      }
+
+      const prevT = moduleDebugTimerRef.current[moduleId];
+      if (prevT) window.clearTimeout(prevT);
+
+      setSelectedModuleId(moduleId);
+      setSelectedKeys([modKey(moduleId)]);
+      setRightView('list');
+      switchCaseListTab('debugReport', moduleId);
+
+      if (mode === 'full') {
+        patchModuleDebugReport(moduleId, {
+          phase: 'running',
+          envKey: effectiveEnvKey,
+          env: formatDebugReportEnvLabel(effectiveEnvKey, isDeviceVersionDev),
+          rows: [],
+          reportTreeModuleKey: moduleId,
+          statusFilter: 'all',
+        });
+      } else {
+        patchModuleDebugReport(moduleId, {
+          phase: 'running',
+          envKey: effectiveEnvKey,
+          env: formatDebugReportEnvLabel(effectiveEnvKey, isDeviceVersionDev),
+        });
+      }
+
+      const capturedRerunIds = [...rerunCaseIds];
+      moduleDebugTimerRef.current[moduleId] = window.setTimeout(() => {
+        if (mode === 'failedAbnormalOnly') {
+          const newRows = buildDebugReportRerunRows(runCases, moduleNameById);
+          setModuleDebugReportByModuleId((prev) => {
+            const cur = prev[moduleId];
+            if (!cur) return prev;
+            return {
+              ...prev,
+              [moduleId]: {
+                ...cur,
+                phase: 'done',
+                rows: mergeDebugReportRerunRows(cur.rows, capturedRerunIds, newRows),
+              },
+            };
+          });
+          message.success(`失败/异常用例重跑完成（Mock）：${capturedRerunIds.length} 条`);
+        } else {
+          const rows = buildDebugReportRows(runCases, moduleNameById);
+          patchModuleDebugReport(moduleId, { phase: 'done', rows });
+          message.success(`目录调试完成（Mock）：${rows.length} 条用例`);
+        }
+        delete moduleDebugTimerRef.current[moduleId];
+      }, 2400);
+    },
+    [
+      cases,
+      isDeviceVersionDev,
+      moduleDebugReportByModuleId,
+      moduleNameById,
+      modules,
+      patchModuleDebugReport,
+      switchCaseListTab,
+    ]
+  );
+
+  const submitPersistentDebugRun = useCallback(
+    (ctx: DebugRunDialogContext, envKey: string) => {
+      const runCases = resolveRunCasesForModule(ctx.moduleId, ctx.targetCaseIds);
+      if (runCases.length === 0) {
+        message.warning('当前目录下没有可调试运行的用例');
+        return;
+      }
+      const moduleName = moduleNameById[ctx.moduleId] ?? '目录';
+      const taskName = `${moduleName}-调试运行`;
+      appendVersionRunTask({
+        id: `RUN-${Date.now()}`,
+        name: taskName,
+        versionId,
+        env: envKey,
+        scope: 'module',
+        scopeValues: [ctx.moduleId],
+        triggerTime: nowTaskTimeText(),
+        finishTime: '-',
+        status: '排队中',
+        progress: 0,
+        caseCount: runCases.length,
+        coverage: 0,
+        passRate: 0,
+        duration: '-',
+      });
+      message.success(`已创建${taskName}测试任务，请在「测试运行」模块查看`);
+    },
+    [moduleNameById, resolveRunCasesForModule, versionId]
+  );
+
+  const openDebugRunModal = useCallback(
+    (ctx: DebugRunDialogContext) => {
+      const runCases = resolveRunCasesForModule(ctx.moduleId, ctx.targetCaseIds);
+      if (runCases.length === 0) {
+        message.warning('当前目录下没有可调试运行的用例');
+        return;
+      }
+      setDebugRunContext(ctx);
+      debugRunForm.setFieldsValue({ env: defaultEnv, taskType: 'temporary' });
+      setDebugRunModalOpen(true);
+    },
+    [debugRunForm, defaultEnv, resolveRunCasesForModule]
+  );
+
+  const submitDebugRunModal = useCallback(async () => {
+    if (!debugRunContext) return;
+    try {
+      const values = await debugRunForm.validateFields();
+      setDebugRunModalOpen(false);
+      if (values.taskType === 'persistent') {
+        submitPersistentDebugRun(debugRunContext, values.env);
+      } else {
+        executeTemporaryModuleDebugRun(debugRunContext.moduleId, values.env, {
+          targetCaseIds: debugRunContext.targetCaseIds,
+        });
+      }
+      setDebugRunContext(null);
+    } catch {
+      /* 表单校验未通过 */
+    }
+  }, [debugRunContext, debugRunForm, executeTemporaryModuleDebugRun, submitPersistentDebugRun]);
+
+  /** 报告内「再次运行」：沿用当前报告环境，不弹窗 */
+  const rerunModuleDebugReport = useCallback(
+    (moduleId: string, mode: ModuleDebugRunMode = 'full') => {
+      const report = moduleDebugReportByModuleId[moduleId];
+      const envKey = report?.envKey ?? defaultEnv;
+      executeTemporaryModuleDebugRun(moduleId, envKey, { mode });
+    },
+    [defaultEnv, executeTemporaryModuleDebugRun, moduleDebugReportByModuleId]
+  );
+
+  const selectedModuleDebugReport = useMemo((): ModuleDebugReportState | null => {
+    if (!selectedModuleId) return null;
+    return (
+      moduleDebugReportByModuleId[selectedModuleId] ?? {
+        phase: 'idle',
+        envKey: defaultEnv,
+        env: formatDebugReportEnvLabel(defaultEnv, isDeviceVersionDev),
+        rows: [],
+        reportTreeModuleKey: selectedModuleId,
+        statusFilter: 'all',
+      }
+    );
+  }, [defaultEnv, isDeviceVersionDev, moduleDebugReportByModuleId, selectedModuleId]);
+
+  const debugReportDrawerDetail = useMemo((): CaseRunDetail | null => {
+    if (!debugReportSelectedCaseId || !selectedModuleDebugReport) return null;
+    const builtin = REPORT_CASE_DETAIL_BY_ID[debugReportSelectedCaseId];
+    if (builtin) return builtin;
+    const row = selectedModuleDebugReport.rows.find((r) => r.id === debugReportSelectedCaseId);
+    if (!row) return null;
+    return {
+      caseName: row.name,
+      tags: row.tags,
+      caseResult: row.result === '成功' ? 'pass' : 'fail',
+      steps: [],
+    };
+  }, [debugReportSelectedCaseId, selectedModuleDebugReport]);
+
+  useEffect(() => {
+    setDebugReportDrawerStepIdx(0);
+  }, [debugReportSelectedCaseId, debugReportDrawerOpen]);
+
+  useEffect(
+    () => () => {
+      Object.values(moduleDebugTimerRef.current).forEach((t) => window.clearTimeout(t));
+    },
+    []
+  );
+
   const [moduleEnabledMap, setModuleEnabledMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(mockCaseModules.map((m) => [m.id, true]))
   );
@@ -718,8 +1520,8 @@ export function CaseManagement() {
   );
 
   const treeData = useMemo(
-    () => buildTreeData(modules, cases, versionId),
-    [modules, cases, versionId]
+    () => buildTreeData(modules, cases, versionId, isDeviceVersionDev),
+    [modules, cases, versionId, isDeviceVersionDev]
   );
   const filteredTreeData = useMemo(
     () => filterTreeByKeyword(treeData, treeKeyword),
@@ -787,8 +1589,8 @@ export function CaseManagement() {
 
   const listRows = useMemo(() => {
     if (!selectedModuleId) return [];
-    return filterCasesInModuleTree(selectedModuleId, modules, cases);
-  }, [selectedModuleId, modules, cases]);
+    return filterCasesInModuleTree(selectedModuleId, modules, cases, isDeviceVersionDev);
+  }, [selectedModuleId, modules, cases, isDeviceVersionDev]);
 
   const searchedRows = useMemo(() => {
     const rows = [...listRows];
@@ -841,7 +1643,7 @@ export function CaseManagement() {
     return modules.find((m) => m.id === selectedModuleId)?.name ?? '根目录';
   }, [modules, selectedModuleId]);
 
-  const envOptions = ['DEV', 'SIT', 'UAT', 'PRD'].map((e) => ({ label: e, value: e }));
+  const envOptions = runEnvOptions;
   const versionTitle = useMemo(() => {
     const q = new URLSearchParams(location.search);
     const vn = q.get('vn')?.trim();
@@ -897,8 +1699,12 @@ export function CaseManagement() {
   useEffect(() => {
     setSelectedCaseIds([]);
     setCaseSearch('');
-    setCaseListTab('dir');
-  }, [selectedModuleId]);
+    if (selectedModuleId) {
+      setCaseListTab(caseListTabByModuleId[selectedModuleId] ?? 'dir');
+    } else {
+      setCaseListTab('dir');
+    }
+  }, [selectedModuleId, caseListTabByModuleId]);
 
   useEffect(() => {
     if (!isResizing) return undefined;
@@ -1179,13 +1985,21 @@ export function CaseManagement() {
 
   const [addCaseOpen, setAddCaseOpen] = useState(false);
   const [addCaseMode, setAddCaseMode] = useState<'custom' | 'api' | 'yaml'>('custom');
-  const [addCaseForm] = Form.useForm<{ name: string; tags: string[]; moduleId: string }>();
+  const [addCaseForm] = Form.useForm<{
+    name: string;
+    tags: string[];
+    moduleId?: string;
+    folderId?: string;
+    suiteId?: string;
+  }>();
+  const addCaseFolderId = Form.useWatch('folderId', addCaseForm);
   const [apiImportForm] = Form.useForm<{ moduleId: string; tags: string[] }>();
   const [apiSceneSelectedKeys, setApiSceneSelectedKeys] = useState<string[]>([]);
   const [yamlFiles, setYamlFiles] = useState<Array<{ uid: string; name: string }>>([]);
 
   const [addSubOpen, setAddSubOpen] = useState(false);
   const [addSubParentId, setAddSubParentId] = useState<string | null>(null);
+  const [addSubKind, setAddSubKind] = useState<'folder' | 'suite'>('folder');
   const [addSubForm] = Form.useForm<{ name: string }>();
 
   const [renameOpen, setRenameOpen] = useState(false);
@@ -1195,12 +2009,50 @@ export function CaseManagement() {
   } | null>(null);
   const [renameForm] = Form.useForm<{ name: string }>();
 
-  const openAddCase = (moduleId: string) => {
+  const canHostCases = useCallback(
+    (moduleId: string) => {
+      if (!isDeviceVersionDev) return true;
+      const mod = modules.find((m) => m.id === moduleId);
+      return isSuiteModule(mod);
+    },
+    [isDeviceVersionDev, modules]
+  );
+
+  const topAddMenuItems = useMemo((): MenuProps['items'] => [
+    { key: 'add-case', label: '添加测试用例', icon: <PlusOutlined /> },
+    { key: 'add-dir', label: '添加目录', icon: <PlusOutlined /> },
+    { key: 'export-case', label: '导出测试用例', icon: <ExportOutlined /> },
+  ], []);
+
+  const openAddCase = (moduleId: string | null) => {
+    if (!isDeviceVersionDev) {
+      if (!moduleId) {
+        message.warning('请先在左侧选择目录');
+        return;
+      }
+    }
     setAddCaseMode('custom');
     addCaseForm.resetFields();
-    addCaseForm.setFieldsValue({ moduleId, tags: [] });
+    const mod = moduleId ? modules.find((m) => m.id === moduleId) : undefined;
+    if (isDeviceVersionDev) {
+      if (mod && isSuiteModule(mod)) {
+        addCaseForm.setFieldsValue({
+          folderId: mod.parentId ?? undefined,
+          suiteId: moduleId!,
+          tags: [],
+        });
+      } else if (mod) {
+        addCaseForm.setFieldsValue({ folderId: moduleId!, tags: [] });
+      } else {
+        addCaseForm.setFieldsValue({ tags: [] });
+      }
+    } else {
+      addCaseForm.setFieldsValue({ moduleId: moduleId!, tags: [] });
+    }
     apiImportForm.resetFields();
-    apiImportForm.setFieldsValue({ moduleId, tags: [] });
+    if (moduleId && mod && isSuiteModule(mod)) {
+      apiImportForm.setFieldsValue({ moduleId, tags: [] });
+    }
     setApiSceneSelectedKeys([]);
     setYamlFiles([]);
     setAddCaseOpen(true);
@@ -1234,8 +2086,14 @@ export function CaseManagement() {
 
   const submitAddCase = () => {
     if (addCaseMode === 'custom') {
-      addCaseForm.validateFields().then(({ name, moduleId, tags }) => {
-        appendCase({ name, moduleId, tags });
+      addCaseForm.validateFields().then((values) => {
+        const { name, tags } = values;
+        const targetModuleId = isDeviceVersionDev ? values.suiteId : values.moduleId;
+        if (!targetModuleId || (isDeviceVersionDev && !canHostCases(targetModuleId))) {
+          message.warning('请选择所属套件');
+          return;
+        }
+        appendCase({ name, moduleId: targetModuleId, tags });
         message.success('已添加测试用例');
         setAddCaseOpen(false);
       });
@@ -1257,23 +2115,32 @@ export function CaseManagement() {
     }
 
     if (!yamlFiles.length) {
-      message.warning('请上传 YAML 文件');
+      message.warning(isDeviceVersionDev ? '请上传 Robot 文件' : '请上传 YAML 文件');
       return;
     }
     // 按验收要求：仅提示成功，不落地新增用例数据
-    message.success('导入成功');
+    message.success(isDeviceVersionDev ? 'Robot 文件导入成功' : '导入成功');
     setAddCaseOpen(false);
   };
 
-  const openAddSub = (parentId: string | null) => {
+  const openAddSub = (parentId: string | null, kind: 'folder' | 'suite' = 'folder') => {
+    if (isDeviceVersionDev && kind === 'suite' && parentId) {
+      const parent = modules.find((m) => m.id === parentId);
+      if (parent && isSuiteModule(parent)) {
+        message.warning('测试套件下不能添加子套件');
+        return;
+      }
+    }
     setAddSubParentId(parentId);
+    setAddSubKind(kind);
     addSubForm.resetFields();
     setAddSubOpen(true);
   };
 
   const submitAddSub = () => {
     addSubForm.validateFields().then(({ name }) => {
-      const id = `mod-${Date.now()}`;
+      const isSuite = isDeviceVersionDev && addSubKind === 'suite';
+      const id = isSuite ? `suite-${Date.now()}` : `mod-${Date.now()}`;
       const nextSort =
         Math.max(
           0,
@@ -1283,10 +2150,17 @@ export function CaseManagement() {
         ) + 10;
       setModules((prev) => [
         ...prev,
-        { id, versionId, parentId: addSubParentId, name: name.trim(), sort: nextSort },
+        {
+          id,
+          versionId,
+          parentId: addSubParentId,
+          name: name.trim(),
+          sort: nextSort,
+          ...(isDeviceVersionDev ? { moduleKind: isSuite ? 'suite' : 'folder' } : {}),
+        },
       ]);
       setModuleEnabledMap((prev) => ({ ...prev, [id]: true }));
-      message.success('已添加子目录');
+      message.success(isSuite ? '已添加测试套件' : '已添加子目录');
       setAddSubOpen(false);
     });
   };
@@ -1327,14 +2201,18 @@ export function CaseManagement() {
   };
 
   const deleteModule = (id: string) => {
+    const mod = modules.find((m) => m.id === id);
+    const isSuite = isSuiteModule(mod);
     const hasChildMod = modules.some((m) => m.parentId === id);
     const hasCase = cases.some((c) => c.moduleId === id);
     if (hasChildMod || hasCase) {
-      message.warning('请先清空子目录与用例后再删除');
+      message.warning(
+        isSuite ? '请先清空套件下的用例后再删除' : '请先清空子目录/测试套件与用例后再删除'
+      );
       return;
     }
     Modal.confirm({
-      title: '删除目录？',
+      title: isSuite ? '删除测试套件？' : '删除目录？',
       okText: '删除',
       okType: 'danger',
       cancelText: '取消',
@@ -1352,11 +2230,13 @@ export function CaseManagement() {
           return next;
         });
         if (selectedModuleId === id) {
-          const first = firstModuleIdFromTree(buildTreeData(nextMods, cases, versionId));
+          const first = firstModuleIdFromTree(
+            buildTreeData(nextMods, cases, versionId, isDeviceVersionDev)
+          );
           setSelectedModuleId(first);
           setSelectedKeys(first ? [modKey(first)] : []);
         }
-        message.success('已删除目录');
+        message.success(isSuite ? '已删除测试套件' : '已删除目录');
       },
     });
   };
@@ -1416,11 +2296,12 @@ export function CaseManagement() {
 
   const onModuleMenuClick = (moduleId: string, key: string) => {
     if (key === 'add-case') openAddCase(moduleId);
-    if (key === 'add-sub') openAddSub(moduleId);
+    if (key === 'add-suite') openAddSub(moduleId, 'suite');
+    if (key === 'add-sub') openAddSub(moduleId, 'folder');
     if (key === 'rename') openRename('module', moduleId);
     if (key === 'move') message.info('移动到：后续对接目录选择器');
     if (key === 'del') deleteModule(moduleId);
-    if (key === 'debug-run') message.info('目录调试运行（Mock）');
+    if (key === 'debug-run') openDebugRunModal({ moduleId });
     if (key === 'toggle') {
       const enabled = isModuleEnabled(moduleId);
       setModuleEnabledMap((prev) => ({ ...prev, [moduleId]: !enabled }));
@@ -1444,14 +2325,14 @@ export function CaseManagement() {
 
   const onTopAddMenuClick = (key: string) => {
     if (key === 'add-case') {
-      if (!selectedModuleId) {
+      if (!isDeviceVersionDev && !selectedModuleId) {
         message.warning('请先在左侧选择目录');
         return;
       }
       openAddCase(selectedModuleId);
     }
     if (key === 'add-dir') {
-      openAddSub(selectedModuleId ?? null);
+      openAddSub(selectedModuleId ?? null, 'folder');
     }
     if (key === 'export-case') {
       setExportModuleIds([EXPORT_ALL_ROOT_VALUE]);
@@ -2774,6 +3655,14 @@ export function CaseManagement() {
       return;
     }
 
+    if (isDeviceVersionDev && nextParentId) {
+      const parentMod = modules.find((m) => m.id === nextParentId);
+      if (isSuiteModule(parentMod)) {
+        message.warning('测试套件下不能放置目录或子套件');
+        return;
+      }
+    }
+
     setModules((prev) => {
       const dragMod = prev.find((m) => m.id === dragParsed.id);
       const dropMod = prev.find((m) => m.id === targetModuleId);
@@ -2832,24 +3721,49 @@ export function CaseManagement() {
     const parsed = parseTreeKey(key);
     if (!parsed) return <span>{node.title as React.ReactNode}</span>;
     const enabled = parsed.kind === 'module' ? isModuleEnabled(parsed.id) : isCaseEnabled(parsed.id);
-    const moduleMenuItems: MenuProps['items'] = [
-      { key: 'add-case', label: '添加测试用例', icon: <PlusOutlined /> },
-      { key: 'add-sub', label: '添加子目录', icon: <PlusOutlined /> },
-      { key: 'debug-run', label: '调试运行', icon: <CheckCircleOutlined /> },
-      { key: 'rename', label: '重命名', icon: <EditOutlined /> },
-      {
-        key: 'move',
-        label: '移动到',
-        icon: <EditOutlined />,
-      },
-      {
-        key: 'toggle',
-        label: isModuleEnabled(parsed.id) ? '禁用' : '启用',
-        icon: isModuleEnabled(parsed.id) ? <StopOutlined /> : <CheckCircleOutlined />,
-      },
-      { type: 'divider' },
-      { key: 'del', label: '删除', danger: true, icon: <DeleteOutlined /> },
-    ];
+    const moduleRecord = parsed.kind === 'module' ? modules.find((m) => m.id === parsed.id) : undefined;
+    const moduleIsSuite = isSuiteModule(moduleRecord);
+    const moduleMenuItems: MenuProps['items'] = isDeviceVersionDev
+      ? [
+          ...(moduleIsSuite
+            ? [{ key: 'add-case', label: '添加测试用例', icon: <PlusOutlined /> }]
+            : [
+                { key: 'add-suite', label: '添加测试套件', icon: <PlusOutlined /> },
+                { key: 'add-sub', label: '添加子目录', icon: <PlusOutlined /> },
+              ]),
+          { key: 'debug-run', label: '调试运行', icon: <CheckCircleOutlined /> },
+          { key: 'rename', label: '重命名', icon: <EditOutlined /> },
+          {
+            key: 'move',
+            label: '移动到',
+            icon: <EditOutlined />,
+          },
+          {
+            key: 'toggle',
+            label: isModuleEnabled(parsed.id) ? '禁用' : '启用',
+            icon: isModuleEnabled(parsed.id) ? <StopOutlined /> : <CheckCircleOutlined />,
+          },
+          { type: 'divider' },
+          { key: 'del', label: '删除', danger: true, icon: <DeleteOutlined /> },
+        ]
+      : [
+          { key: 'add-case', label: '添加测试用例', icon: <PlusOutlined /> },
+          { key: 'add-sub', label: '添加子目录', icon: <PlusOutlined /> },
+          { key: 'debug-run', label: '调试运行', icon: <CheckCircleOutlined /> },
+          { key: 'rename', label: '重命名', icon: <EditOutlined /> },
+          {
+            key: 'move',
+            label: '移动到',
+            icon: <EditOutlined />,
+          },
+          {
+            key: 'toggle',
+            label: isModuleEnabled(parsed.id) ? '禁用' : '启用',
+            icon: isModuleEnabled(parsed.id) ? <StopOutlined /> : <CheckCircleOutlined />,
+          },
+          { type: 'divider' },
+          { key: 'del', label: '删除', danger: true, icon: <DeleteOutlined /> },
+        ];
     const caseMenuItems: MenuProps['items'] = [
       { key: 'insert', label: '插入测试用例', icon: <PlusOutlined /> },
       { key: 'rename', label: '重命名', icon: <EditOutlined /> },
@@ -2876,7 +3790,11 @@ export function CaseManagement() {
       <div className={`case-tree-row ${enabled ? '' : 'is-disabled'}`}>
         <Space size={6} style={{ minWidth: 0 }}>
           {parsed.kind === 'module' ? (
-            <FolderOpenOutlined style={{ color: enabled ? '#1677ff' : '#bfbfbf' }} />
+            moduleIsSuite ? (
+              <AppstoreOutlined style={{ color: enabled ? '#722ed1' : '#bfbfbf' }} />
+            ) : (
+              <FolderOpenOutlined style={{ color: enabled ? '#1677ff' : '#bfbfbf' }} />
+            )
           ) : (
             <FileTextOutlined style={{ color: enabled ? '#52c41a' : '#bfbfbf' }} />
           )}
@@ -3064,7 +3982,7 @@ export function CaseManagement() {
           </Text>
           <Text type="secondary">运行环境</Text>
           <Select
-            value={selectedEnvByCase[caseId] ?? 'SIT'}
+            value={selectedEnvByCase[caseId] ?? defaultEnv}
             onChange={(v) => {
               const nextEnv = String(v);
               setSelectedEnvByCase((prev) => ({ ...prev, [caseId]: nextEnv }));
@@ -3079,7 +3997,7 @@ export function CaseManagement() {
               });
             }}
             options={envOptions}
-            style={{ width: 120 }}
+            style={{ width: isDeviceVersionDev ? 180 : 120 }}
             placeholder="环境"
           />
           <Button
@@ -3098,8 +4016,7 @@ export function CaseManagement() {
             loading={debugPhase === 'running'}
             onClick={() => {
               const firstStepId = list[0]?.id;
-              const caseEnvHost =
-                ENV_DEFAULT_HOST[selectedEnvByCase[caseId] ?? 'SIT'] ?? ENV_DEFAULT_HOST.SIT;
+              const caseEnvHost = resolveEnvHost(selectedEnvByCase[caseId] ?? defaultEnv);
               triggerCaseDebug(
                 caseId,
                 () => {
@@ -3550,7 +4467,7 @@ export function CaseManagement() {
                         }
                         options={[
                           {
-                            label: `默认（${ENV_DEFAULT_PROTOCOL[selectedEnvByCase[caseId] ?? 'SIT']}）`,
+                            label: `默认（${resolveEnvProtocol(selectedEnvByCase[caseId] ?? defaultEnv)}）`,
                             value: '默认',
                           },
                           { label: 'http', value: 'http' },
@@ -5011,6 +5928,44 @@ export function CaseManagement() {
     .filter((m) => m.versionId === versionId)
     .map((m) => ({ label: m.name, value: m.id }));
 
+  const folderOptions = useMemo(
+    () =>
+      modules
+        .filter((m) => m.versionId === versionId && !isSuiteModule(m))
+        .map((m) => ({ label: m.name, value: m.id })),
+    [modules, versionId]
+  );
+
+  const suiteOptions = useMemo(
+    () =>
+      modules
+        .filter((m) => m.versionId === versionId && isSuiteModule(m))
+        .map((m) => ({ label: m.name, value: m.id })),
+    [modules, versionId]
+  );
+
+  const filteredSuiteOptions = useMemo(() => {
+    if (!addCaseFolderId) return suiteOptions;
+    return suiteOptions.filter((opt) => {
+      const mod = modules.find((m) => m.id === opt.value);
+      return mod?.parentId === addCaseFolderId;
+    });
+  }, [addCaseFolderId, suiteOptions, modules]);
+
+  const addCaseTabItems = useMemo(() => {
+    if (isDeviceVersionDev) {
+      return [
+        { key: 'custom', label: '自定义添加' },
+        { key: 'yaml', label: '从robot文件导入' },
+      ];
+    }
+    return [
+      { key: 'custom', label: '自定义添加' },
+      { key: 'api', label: '从接口场景添加' },
+      { key: 'yaml', label: 'yaml用例导入' },
+    ];
+  }, [isDeviceVersionDev]);
+
   const performBatchCopyCasesToModule = (targetModuleId: string, selectedIds: string[]) => {
     const sources = selectedIds.map((id) => cases.find((c) => c.id === id)).filter(Boolean) as TestCase[];
     if (!sources.length) {
@@ -5116,8 +6071,8 @@ export function CaseManagement() {
       <Button
         type="primary"
         icon={<PlusOutlined />}
-        disabled={!selectedModuleId}
-        onClick={() => selectedModuleId && openAddCase(selectedModuleId)}
+        disabled={!isDeviceVersionDev && (!selectedModuleId || !canHostCases(selectedModuleId))}
+        onClick={() => openAddCase(selectedModuleId)}
       >
         添加测试用例
       </Button>
@@ -5171,7 +6126,13 @@ export function CaseManagement() {
       <Button
         icon={<CheckCircleOutlined />}
         disabled={selectedCaseIds.length === 0}
-        onClick={() => message.success(`已触发 ${selectedCaseIds.length} 条用例调试运行（Mock）`)}
+        onClick={() => {
+          if (!selectedModuleId) {
+            message.warning('请先在左侧选择目录');
+            return;
+          }
+          openDebugRunModal({ moduleId: selectedModuleId, targetCaseIds: selectedCaseIds });
+        }}
       >
         调试运行
       </Button>
@@ -5373,7 +6334,7 @@ export function CaseManagement() {
         >
           <Input
             allowClear
-            placeholder="搜索目录/用例"
+            placeholder={isDeviceVersionDev ? '搜索文件夹/套件/用例' : '搜索目录/用例'}
             value={treeKeyword}
             onChange={(e) => setTreeKeyword(e.target.value)}
             prefix={<SearchOutlined />}
@@ -5382,11 +6343,7 @@ export function CaseManagement() {
           <Dropdown
             trigger={['click']}
             menu={{
-              items: [
-                { key: 'add-case', label: '添加测试用例', icon: <PlusOutlined /> },
-                { key: 'add-dir', label: '添加目录', icon: <PlusOutlined /> },
-                { key: 'export-case', label: '导出测试用例', icon: <ExportOutlined /> },
-              ],
+              items: topAddMenuItems,
               onClick: ({ key }) => onTopAddMenuClick(String(key)),
             }}
           >
@@ -5485,11 +6442,15 @@ export function CaseManagement() {
                     size="middle"
                     type="line"
                     activeKey={caseListTab}
-                    onChange={(k) => setCaseListTab(k as 'dir' | 'module' | 'tagGroup')}
+                    onChange={(k) => {
+                      const tab = k as CaseListTabKey;
+                      switchCaseListTab(tab, selectedModuleId);
+                    }}
                     items={[
                       { key: 'dir', label: selectedModuleName },
                       { key: 'module', label: '模块前置' },
                       { key: 'tagGroup', label: '标签/分组' },
+                      { key: 'debugReport', label: '调试报告' },
                     ]}
                   />
                   <span />
@@ -5559,6 +6520,29 @@ export function CaseManagement() {
                     </Form.Item>
                   </Form>
                 </Space>
+              ) : caseListTab === 'debugReport' && selectedModuleId && selectedModuleDebugReport ? (
+                <ModuleDebugReportPanel
+                  reportState={selectedModuleDebugReport}
+                  ownerModuleId={selectedModuleId}
+                  ownerModuleName={selectedModuleName}
+                  versionModules={versionModules}
+                  onRerun={() => rerunModuleDebugReport(selectedModuleId)}
+                  onRerunFailed={() =>
+                    rerunModuleDebugReport(selectedModuleId, 'failedAbnormalOnly')
+                  }
+                  onStartDebugRun={() => openDebugRunModal({ moduleId: selectedModuleId })}
+                  onStatusFilterChange={(filter) =>
+                    patchModuleDebugReport(selectedModuleId, { statusFilter: filter })
+                  }
+                  onReportTreeModuleKeyChange={(moduleKey) =>
+                    patchModuleDebugReport(selectedModuleId, { reportTreeModuleKey: moduleKey })
+                  }
+                  onCaseNameClick={(caseId) => {
+                    setDebugReportSelectedCaseId(caseId);
+                    setDebugReportDrawerOpen(true);
+                  }}
+                  selectedCaseId={debugReportSelectedCaseId}
+                />
               ) : (
                 <Empty
                   description="该 Tab 需求待澄清，暂不展示内容"
@@ -5753,11 +6737,7 @@ export function CaseManagement() {
         <Tabs
           activeKey={addCaseMode}
           onChange={(k) => setAddCaseMode(k as 'custom' | 'api' | 'yaml')}
-          items={[
-            { key: 'custom', label: '自定义添加' },
-            { key: 'api', label: '从接口场景添加' },
-            { key: 'yaml', label: 'yaml用例导入' },
-          ]}
+          items={addCaseTabItems}
         />
 
         {addCaseMode === 'custom' && (
@@ -5765,16 +6745,43 @@ export function CaseManagement() {
             <Form.Item name="name" label="测试用例名称" rules={[{ required: true }]}>
               <Input placeholder="请输入" />
             </Form.Item>
-            <Form.Item name="moduleId" label="所属模块" rules={[{ required: true }]}>
-              <Select options={moduleOptions} placeholder="请选择所属模块" />
-            </Form.Item>
+            {isDeviceVersionDev ? (
+              <>
+                <Form.Item
+                  name="folderId"
+                  label="所属目录"
+                  rules={[{ required: true, message: '请选择所属目录' }]}
+                >
+                  <Select
+                    options={folderOptions}
+                    placeholder="请选择所属目录"
+                    onChange={() => addCaseForm.setFieldValue('suiteId', undefined)}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="suiteId"
+                  label="所属套件"
+                  rules={[{ required: true, message: '请选择所属套件' }]}
+                >
+                  <Select
+                    options={filteredSuiteOptions}
+                    placeholder={addCaseFolderId ? '请选择所属套件' : '请先选择所属目录'}
+                    disabled={!addCaseFolderId}
+                  />
+                </Form.Item>
+              </>
+            ) : (
+              <Form.Item name="moduleId" label="所属模块" rules={[{ required: true }]}>
+                <Select options={moduleOptions} placeholder="请选择所属模块" />
+              </Form.Item>
+            )}
             <Form.Item name="tags" label="标签">
               <Select mode="tags" placeholder="请选择标签" />
             </Form.Item>
           </Form>
         )}
 
-        {addCaseMode === 'api' && (
+        {!isDeviceVersionDev && addCaseMode === 'api' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <Text strong style={{ marginBottom: 8, display: 'block' }}>
@@ -5802,58 +6809,289 @@ export function CaseManagement() {
 
         {addCaseMode === 'yaml' && (
           <div>
-            <Alert
-              type="info"
-              showIcon
-              message="用例会根据YAML中的路径导入到对应目录中，如果系统中没有对应目录则会按YAML路径自动新建目录。"
-              style={{ marginBottom: 12 }}
-            />
-            <Button
-              type="link"
-              icon={<DownloadOutlined />}
-              style={{ paddingInline: 0, marginBottom: 8 }}
-              onClick={() => message.info('下载YAML模板（Mock）')}
-            >
-              下载YAML模板
-            </Button>
-            <Upload.Dragger
-              accept=".yaml,.yml"
-              multiple
-              maxCount={10}
-              beforeUpload={() => false}
-              fileList={yamlFiles as any}
-              onChange={(info) => {
-                const list = info.fileList.slice(0, 10);
-                if (info.fileList.length > 10) {
-                  message.warning('最多支持上传 10 个 YAML 文件');
-                }
-                setYamlFiles(list.map((f) => ({ uid: f.uid, name: f.name })));
-              }}
-              style={{ marginBottom: 12 }}
-            >
-              <p className="ant-upload-drag-icon">
-                <UploadOutlined />
-              </p>
-              <p>点击或拖拽文件到此区域上传</p>
-              <p style={{ color: '#999' }}>支持批量上传（最多 10 个），仅支持 .yaml 或 .yml 格式</p>
-            </Upload.Dragger>
+            {isDeviceVersionDev ? (
+              <>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="用例将根据 Robot 文件中的路径导入到对应目录与测试套件中；若系统中不存在对应节点，将按文件路径自动新建。"
+                  style={{ marginBottom: 12 }}
+                />
+                <Button
+                  type="link"
+                  icon={<DownloadOutlined />}
+                  style={{ paddingInline: 0, marginBottom: 8 }}
+                  onClick={() => message.info('下载 Robot 模板（Mock）')}
+                >
+                  下载 Robot 模板
+                </Button>
+                <Upload.Dragger
+                  accept=".robot"
+                  multiple
+                  maxCount={10}
+                  beforeUpload={() => false}
+                  fileList={yamlFiles as any}
+                  onChange={(info) => {
+                    const list = info.fileList.slice(0, 10);
+                    if (info.fileList.length > 10) {
+                      message.warning('最多支持上传 10 个 Robot 文件');
+                    }
+                    setYamlFiles(list.map((f) => ({ uid: f.uid, name: f.name })));
+                  }}
+                  style={{ marginBottom: 12 }}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <UploadOutlined />
+                  </p>
+                  <p>点击或拖拽文件到此区域上传</p>
+                  <p style={{ color: '#999' }}>支持批量上传（最多 10 个），仅支持 .robot 格式</p>
+                </Upload.Dragger>
+              </>
+            ) : (
+              <>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="用例会根据YAML中的路径导入到对应目录中，如果系统中没有对应目录则会按YAML路径自动新建目录。"
+                  style={{ marginBottom: 12 }}
+                />
+                <Button
+                  type="link"
+                  icon={<DownloadOutlined />}
+                  style={{ paddingInline: 0, marginBottom: 8 }}
+                  onClick={() => message.info('下载YAML模板（Mock）')}
+                >
+                  下载YAML模板
+                </Button>
+                <Upload.Dragger
+                  accept=".yaml,.yml"
+                  multiple
+                  maxCount={10}
+                  beforeUpload={() => false}
+                  fileList={yamlFiles as any}
+                  onChange={(info) => {
+                    const list = info.fileList.slice(0, 10);
+                    if (info.fileList.length > 10) {
+                      message.warning('最多支持上传 10 个 YAML 文件');
+                    }
+                    setYamlFiles(list.map((f) => ({ uid: f.uid, name: f.name })));
+                  }}
+                  style={{ marginBottom: 12 }}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <UploadOutlined />
+                  </p>
+                  <p>点击或拖拽文件到此区域上传</p>
+                  <p style={{ color: '#999' }}>支持批量上传（最多 10 个），仅支持 .yaml 或 .yml 格式</p>
+                </Upload.Dragger>
+              </>
+            )}
           </div>
         )}
       </Modal>
 
       <Modal
-        title="添加子目录"
+        title={
+          addSubKind === 'suite'
+            ? '添加测试套件'
+            : addSubParentId
+              ? '添加子目录'
+              : '添加目录'
+        }
         open={addSubOpen}
         onOk={submitAddSub}
         onCancel={() => setAddSubOpen(false)}
         destroyOnClose
       >
         <Form form={addSubForm} layout="vertical">
-          <Form.Item name="name" label="目录名称" rules={[{ required: true }]}>
+          <Form.Item
+            name="name"
+            label={addSubKind === 'suite' ? '套件名称' : '目录名称'}
+            rules={[{ required: true }]}
+          >
             <Input placeholder="请输入" />
           </Form.Item>
         </Form>
       </Modal>
+
+      <Drawer
+        title={
+          debugReportDrawerDetail ? (
+            <Space size={8} wrap>
+              <Typography.Text strong style={{ fontSize: 14 }}>
+                用例详情：{debugReportDrawerDetail.caseName}
+              </Typography.Text>
+              <Tag
+                color={debugReportDrawerDetail.caseResult === 'pass' ? 'success' : 'error'}
+                icon={
+                  debugReportDrawerDetail.caseResult === 'pass' ? (
+                    <CheckCircleOutlined />
+                  ) : (
+                    <CloseCircleOutlined />
+                  )
+                }
+                style={{ marginInlineEnd: 0 }}
+              >
+                {debugReportDrawerDetail.caseResult === 'pass' ? '通过' : '失败'}
+              </Tag>
+              {debugReportDrawerDetail.tags.length ? (
+                <Space size={4} wrap>
+                  {debugReportDrawerDetail.tags.map((t) => (
+                    <Tag key={t} style={{ marginInlineEnd: 0 }}>
+                      {t}
+                    </Tag>
+                  ))}
+                </Space>
+              ) : null}
+            </Space>
+          ) : (
+            '用例详情'
+          )
+        }
+        placement="right"
+        width="min(900px, 60vw)"
+        open={debugReportDrawerOpen}
+        onClose={() => setDebugReportDrawerOpen(false)}
+        mask={false}
+        zIndex={1200}
+        styles={{
+          body: { padding: 0, height: '100%', overflow: 'hidden' },
+        }}
+      >
+        {debugReportDrawerDetail && debugReportDrawerDetail.steps.length ? (
+          (() => {
+            const safeIdx = Math.min(
+              Math.max(debugReportDrawerStepIdx, 0),
+              debugReportDrawerDetail.steps.length - 1
+            );
+            const activeResult = debugReportDrawerDetail.steps[safeIdx];
+            return (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '220px 1fr',
+                  gap: 0,
+                  height: '100%',
+                  minHeight: 0,
+                }}
+              >
+                <Card
+                  size="small"
+                  title="步骤"
+                  style={{
+                    height: '100%',
+                    borderRight: '1px solid #f0f0f0',
+                    borderRadius: 0,
+                  }}
+                  styles={{ body: { padding: 8, height: '100%', overflow: 'auto' } }}
+                >
+                  <List
+                    size="small"
+                    dataSource={debugReportDrawerDetail.steps}
+                    renderItem={(item, idx) => {
+                      const active = idx === safeIdx;
+                      const ok = item.ok;
+                      return (
+                        <List.Item
+                          onClick={() => setDebugReportDrawerStepIdx(idx)}
+                          style={{
+                            cursor: 'pointer',
+                            background: active ? '#bae0ff' : undefined,
+                            borderLeft: active
+                              ? '3px solid #1677ff'
+                              : '3px solid transparent',
+                            padding: '6px 8px',
+                            borderRadius: 4,
+                            transition: 'background 0.15s ease, border-color 0.15s ease',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              width: '100%',
+                              minWidth: 0,
+                            }}
+                          >
+                            {ok ? (
+                              <CheckCircleOutlined
+                                style={{ color: '#52c41a', fontSize: 14, flex: '0 0 auto' }}
+                              />
+                            ) : (
+                              <CloseCircleOutlined
+                                style={{ color: '#ff4d4f', fontSize: 14, flex: '0 0 auto' }}
+                              />
+                            )}
+                            <Typography.Text style={{ flex: '0 0 auto' }}>
+                              {item.order}.
+                            </Typography.Text>
+                            <Typography.Text
+                              ellipsis={{ tooltip: item.title }}
+                              style={{ flex: 1, minWidth: 0 }}
+                            >
+                              {item.title}
+                            </Typography.Text>
+                          </div>
+                        </List.Item>
+                      );
+                    }}
+                  />
+                </Card>
+                <Card
+                  size="small"
+                  title={<DebugStepResultHeader result={activeResult} />}
+                  style={{ height: '100%', borderRadius: 0 }}
+                  styles={{
+                    body: { height: '100%', overflow: 'auto', padding: 16 },
+                    header: { padding: '8px 16px' },
+                  }}
+                >
+                  <DebugStepDetailTabs result={activeResult} />
+                </Card>
+              </div>
+            );
+          })()
+        ) : (
+          <div style={{ padding: 24 }}>
+            <Empty description={debugReportDrawerDetail ? '暂无步骤详情（Mock）' : '暂无详情'} />
+          </div>
+        )}
+      </Drawer>
+
+      <FormModal
+        title="调试运行"
+        open={debugRunModalOpen}
+        onOk={() => void submitDebugRunModal()}
+        onCancel={() => {
+          setDebugRunModalOpen(false);
+          setDebugRunContext(null);
+        }}
+        okText="开始运行"
+        width={480}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Text type="secondary">
+            临时任务报告仅在当前目录「调试报告」Tab 展示；持久任务将写入「测试运行」模块。
+          </Text>
+          <Form
+            form={debugRunForm}
+            layout="vertical"
+            colon={false}
+            initialValues={{ taskType: 'temporary', env: defaultEnv }}
+          >
+            <Form.Item name="env" label="运行环境" rules={[{ required: true, message: '请选择运行环境' }]}>
+              <Select options={runEnvOptions} placeholder="请选择运行环境" />
+            </Form.Item>
+            <Form.Item name="taskType" label="任务类型">
+              <Radio.Group>
+                <Radio value="temporary">临时</Radio>
+                <Radio value="persistent">持久</Radio>
+              </Radio.Group>
+            </Form.Item>
+          </Form>
+        </Space>
+      </FormModal>
 
       <Modal
         title="重命名"

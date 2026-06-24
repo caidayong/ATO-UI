@@ -20,7 +20,7 @@ const { Header, Sider, Content } = Layout;
 type MenuItem = Required<MenuProps>['items'][number];
 
 const AUTOMATION_FUNCTIONS_KEY = '/automation/functions';
-const AUTOMATION_RESOURCES_KEY = '/automation/resources';
+const AUTOMATION_RESOURCES_KEY = ROUTES.AUTOMATION_RESOURCES;
 
 function mainMenuSelectedKey(pathname: string): string {
   if (pathname === '/functions' || pathname.startsWith('/functions/')) {
@@ -90,7 +90,7 @@ const menuItems: MenuItem[] = [
       },
       {
         key: AUTOMATION_RESOURCES_KEY,
-        label: <Link to="/resources">资源管理</Link>,
+        label: <Link to={ROUTES.AUTOMATION_RESOURCES}>资源管理</Link>,
       },
     ],
   },
@@ -160,6 +160,14 @@ const userDropdownItems: MenuProps['items'] = [
 ];
 
 function buildBreadcrumbItems(pathname: string): BreadcrumbProps['items'] {
+  if (/^\/resources\/environments\/[^/]+$/.test(pathname)) {
+    return [
+      { title: '自动化开发' },
+      { title: <Link to={ROUTES.AUTOMATION_RESOURCES}>资源管理</Link> },
+      { title: '环境详情' },
+    ];
+  }
+
   if (pathname === '/resources' || pathname.startsWith('/resources/')) {
     return [{ title: '自动化开发' }, { title: '资源管理' }];
   }
