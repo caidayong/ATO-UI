@@ -18,6 +18,7 @@ import { PlatformAutomation } from '@/pages/PlatformAutomation';
 import { PlatformAutomationTaskDetail } from '@/pages/PlatformAutomationTaskDetail';
 import { ProductionPlanList } from '@/pages/ProductionPlanList';
 import { ProductionPlanDetail } from '@/pages/ProductionPlanDetail';
+import { HistoricalPlanDataManagement } from '@/pages/HistoricalPlanDataManagement';
 import { ResumeManagement } from '@/pages/ResumeManagement';
 import { SuiteManagement } from '@/pages/SuiteManagement';
 import { MarketDefectAnalysis } from '@/pages/MarketDefectAnalysis';
@@ -30,6 +31,10 @@ import { ProjectReportDetailPage } from '@/pages/ProjectReportDetailPage';
 import { ProjectReportStatisticsPage } from '@/pages/ProjectReportStatisticsPage';
 import { ResourceManagement } from '@/pages/ResourceManagement';
 import { ResourceEnvironmentDetail } from '@/pages/ResourceEnvironmentDetail';
+import { DocsLayout } from '@/layouts/DocsLayout';
+import { DocsVersionHub } from '@/pages/docs/DocsVersionHub';
+import { DocsVersionList } from '@/pages/docs/DocsVersionList';
+import { DocsViewer } from '@/pages/docs/DocsViewer';
 import {
   DeviceCaseManagement,
   DeviceVariableManagement,
@@ -74,6 +79,13 @@ function DeviceVersionDevFallbackRedirect() {
 export function AppRoutes() {
   return (
     <Routes>
+      {/* 需求文档（只读 Markdown，独立布局） */}
+      <Route path="/docs" element={<DocsLayout />}>
+        <Route index element={<DocsVersionHub />} />
+        <Route path=":version" element={<DocsVersionList />} />
+        <Route path=":version/:docSlug" element={<DocsViewer />} />
+      </Route>
+
       {/* 新窗口：版本用例开发（无主框架） */}
       <Route path="/version-dev/:projectId/:versionId" element={<VersionDevLayout />}>
         <Route index element={<VersionDevIndexRedirect />} />
@@ -122,6 +134,7 @@ export function AppRoutes() {
         <Route path="application/device" element={<PlaceholderPage title="设备自动化" />} />
         <Route path="settings/basic" element={<BasicData />} />
         <Route path="ptsw/plans" element={<ProductionPlanList />} />
+        <Route path="ptsw/plans/history" element={<HistoricalPlanDataManagement />} />
         <Route path="ptsw/plans/:planId" element={<ProductionPlanDetail />} />
         <Route path="ptsw/resume" element={<ResumeManagement />} />
         <Route path="tools" element={<ToolsHub />} />

@@ -5,6 +5,8 @@
  * @changes
  *   - V1.0.1-P4: 初始实现，包含计划列表、筛选搜索、新建计划、编辑/变更/删除入口
  *   - V1.0.1-P6: 迁入 ListPageShell / FilterToolbar / FormModal（ato-ui 页面壳）
+ *   - V1.0.1-P4: REQ-037 计划状态新增「匹配异常」，筛选与重新匹配联动更新
+ *   - V1.0.1-P4: REQ-039 计划列表右上角「历史计划数据管理」入口
  */
 
 import { useMemo, useState } from 'react';
@@ -24,12 +26,12 @@ import {
   message,
 } from 'antd';
 import type { TableProps, UploadFile } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SwapOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FormModal, ListPageShell } from '@/components/layout';
 import { FILTER_CONTROL_WIDTH } from '@/constants/ui';
 import { mockProductionPlans } from '@/mocks/data';
-import { productionPlanDetailPath } from '@/constants/routes';
+import { productionPlanDetailPath, ROUTES } from '@/constants/routes';
 import type { PlanFactory, ProductionPlan, ProductionPlanStatus } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -37,6 +39,7 @@ const DEFAULT_PAGE_SIZE = 10;
 const STATUS_COLOR_MAP: Record<ProductionPlanStatus, string> = {
   匹配中: 'processing',
   匹配失败: 'error',
+  匹配异常: 'volcano',
   待确认: 'warning',
   已提交: 'success',
 };
@@ -151,7 +154,7 @@ export function ProductionPlanList() {
       message.warning('已提交计划不可刷新匹配');
       return;
     }
-    if (!['匹配失败', '待确认'].includes(plan.status)) {
+    if (!['匹配失败', '匹配异常', '待确认'].includes(plan.status)) {
       message.info('当前状态不可刷新匹配');
       return;
     }
@@ -281,7 +284,7 @@ export function ProductionPlanList() {
       width: 220,
       render: (_, record) => {
         const submitted = record.status === '已提交';
-        const canRefresh = ['匹配失败', '待确认'].includes(record.status) && !submitted;
+        const canRefresh = ['匹配失败', '匹配异常', '待确认'].includes(record.status) && !submitted;
         return (
           <Space size={4}>
             <Tooltip title={submitted ? '已提交不可编辑' : '编辑计划'}>
@@ -361,6 +364,7 @@ export function ProductionPlanList() {
                 { label: '全部状态', value: 'ALL' },
                 { label: '匹配中', value: '匹配中' },
                 { label: '匹配失败', value: '匹配失败' },
+                { label: '匹配异常', value: '匹配异常' },
                 { label: '待确认', value: '待确认' },
                 { label: '已提交', value: '已提交' },
               ]}
@@ -379,6 +383,12 @@ export function ProductionPlanList() {
               onPressEnter={handleQuery}
             />
             <Button onClick={handleQuery}>查询</Button>
+            <Button
+              icon={<HistoryOutlined />}
+              onClick={() => navigate(`${ROUTES.PTSW_PLAN_HISTORY}?factory=${currentFactory}`)}
+            >
+              历史计划数据管理
+            </Button>
           </>
         }
         footer={

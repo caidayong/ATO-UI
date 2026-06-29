@@ -1,4 +1,4 @@
-import { Layout, Menu, Badge, Avatar, Dropdown, Breadcrumb } from 'antd';
+import { Layout, Menu, Badge, Avatar, Dropdown, Breadcrumb, Tooltip } from 'antd';
 import {
   DashboardOutlined,
   CodeOutlined,
@@ -257,6 +257,14 @@ function buildBreadcrumbItems(pathname: string): BreadcrumbProps['items'] {
     return [{ title: '自动化应用' }, { title: '设备自动化' }];
   }
 
+  if (pathname === ROUTES.PTSW_PLAN_HISTORY) {
+    return [
+      { title: '产测软件管理' },
+      { title: <Link to={ROUTES.PTSW_PLANS}>计划管理</Link> },
+      { title: '历史计划数据管理' },
+    ];
+  }
+
   if (/^\/ptsw\/plans\/[^/]+$/.test(pathname)) {
     return [
       { title: '产测软件管理' },
@@ -341,7 +349,11 @@ export function MainLayout() {
           <Badge count={5} size="small">
             <BellOutlined style={{ fontSize: 18, cursor: 'pointer' }} />
           </Badge>
-          <QuestionCircleOutlined style={{ fontSize: 18, cursor: 'pointer' }} />
+          <Tooltip title="需求文档">
+            <Link to={ROUTES.DOCS} aria-label="需求文档">
+              <QuestionCircleOutlined style={{ fontSize: 18 }} />
+            </Link>
+          </Tooltip>
           <Dropdown menu={{ items: userDropdownItems }} placement="bottomRight">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <Avatar icon={<UserOutlined />} />

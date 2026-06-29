@@ -20,6 +20,8 @@ export const ROUTES = {
   SETTINGS_BASIC: '/settings/basic',
   /** 计划管理（页面 13） */
   PTSW_PLANS: '/ptsw/plans',
+  /** 历史计划数据管理（计划管理子页） */
+  PTSW_PLAN_HISTORY: '/ptsw/plans/history',
   /** 履历表管理（页面 15） */
   PTSW_RESUME: '/ptsw/resume',
   /** 测试工具 · 卡片入口（V1.0.1-P5） */
@@ -32,6 +34,8 @@ export const ROUTES = {
   TOOLS_MARKET_DEFECTS: '/tools/market-defects',
   /** 测试工具 / 市场缺陷分析 / 报表（V1.0.1-P5） */
   TOOLS_MARKET_DEFECTS_REPORT: '/tools/market-defects/report',
+  /** 需求文档中心（只读 Markdown） */
+  DOCS: '/docs',
 } as const;
 
 /**
@@ -137,6 +141,16 @@ export function deviceVersionDevRunDetailPath(
 /** 计划详情（页面 14） */
 export function productionPlanDetailPath(planId: string): string {
   return `${ROUTES.PTSW_PLANS}/${planId}`;
+}
+
+/** 需求文档 · 版本列表 */
+export function docsVersionPath(version: string): string {
+  return `${ROUTES.DOCS}/${encodeURIComponent(version)}`;
+}
+
+/** 需求文档 · 阅读页 */
+export function docsViewerPath(version: string, docSlug: string): string {
+  return `${docsVersionPath(version)}/${encodeURIComponent(docSlug)}`;
 }
 
 /** 打开新窗口进入用例管理（平台项目） */

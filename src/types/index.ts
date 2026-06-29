@@ -119,12 +119,14 @@ export type TaskStatus = '排队中' | '运行中' | '已完成' | '已停止' |
 export type PlatformTaskTriggerType = '手动触发' | '定时触发' | '周期触发';
 export type PlatformEnvTab = 'test' | 'dev';
 export type PlatformSendMailPolicy = '总是发送' | '成功后发送' | '不发送';
-export type ProductionPlanStatus = '匹配中' | '匹配失败' | '待确认' | '已提交';
+export type ProductionPlanStatus = '匹配中' | '匹配失败' | '匹配异常' | '待确认' | '已提交';
 export type PlanFactory = 'CN' | 'VN';
 export type PlanChangeType = 'software_update' | 'software_offline';
 export type PlanApprovalStatus = '待审批' | '已通过' | '已驳回';
 export type BurnFlag = '是' | '否';
 export type BurnStage = '贴片前烧录' | '贴片后烧录';
+/** 履历表第三步匹配结果（程序名称列 UI 标记） */
+export type ProgramMatchStatus = 'unchanged' | 'updated' | 'not_found';
 export type SoftwareStatus = '正常' | '已下架' | '试产';
 
 /** 用例树节点类型：文件夹（可含子文件夹/套件）或测试套件（Robot Framework 用例容器） */
@@ -249,14 +251,39 @@ export interface BurnRow {
   planId: string;
   taskNo: string;
   materialCode: string;
-  materialDesc: string;
+  materialName: string;
   quantity: number;
   icPartNo: string;
   icModel: string;
-  softwareName: string;
-  softwareStatus?: SoftwareStatus;
+  programName: string;
+  /** 履历表匹配标记：updated=橙色，not_found=红色（空值时） */
+  programMatchStatus?: ProgramMatchStatus;
+  /** 第二步历史烧录表原程序名称；「旧→新」时用于邮件正文 */
+  previousProgramName?: string;
+  /** BOM（Oracle）第一步未匹配到 IC 料号/型号，整行标红 */
+  bomMatchFailed?: boolean;
+  checksum?: string;
   shouldBurn?: BurnFlag;
-  burnStage?: BurnStage;
+  softwarePath?: string;
+}
+
+/** 历史板卡烧录计划表行（历史计划数据管理） */
+export interface HistoricalBurnPlanRow {
+  id: string;
+  factory: PlanFactory;
+  planDate: string;
+  week: string;
+  taskNo: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  icPartNo: string;
+  icModel: string;
+  programName: string;
+  checksum: string;
+  shouldBurn?: BurnFlag;
+  softwarePath: string;
+  updatedAt?: string;
 }
 
 /** 生产计划表行（页面 14 Tab3） */
