@@ -26,8 +26,8 @@ dist-ssr
 # Other VCS metadata
 .svn/
 
-# Project docs and local AI metadata (exclude from deploy repo)
-docs/
+# Project docs and local AI metadata (exclude from deploy repo; 仅根目录 docs/，勿写成 docs/ 以免误伤 src/pages/docs、src/docs)
+/docs/
 prompt/
 .specstory/
 .cursor/
