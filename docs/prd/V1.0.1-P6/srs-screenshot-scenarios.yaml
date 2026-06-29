@@ -1,0 +1,286 @@
+# V1.0.1-P6 SRS 原型截图场景（REQ-001～025）
+# 执行：npm run srs:screenshots -- --version V1.0.1-P6
+# 占位符 {fixture.xxx} → scripts/srs-screenshots/fixtures.json
+# 步骤类型：goto | waitMs | waitForSelector | clickText | clickButton | clickTab | clickSelector
+#           clickAriaLabel | hoverText | clickFirstCheckbox
+
+# ── 001～009 存量优化 ─────────────────────────────────────────
+
+REQ-V1.0.1-P6-001:
+  ui: false
+  description: 自定义函数 SFTP 下载 — 无 UI
+
+REQ-V1.0.1-P6-002:
+  ui: true
+  description: 用例管理 — if 判断多条件配置
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-002.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/cases?caseId={fixture.caseId}
+        - waitMs: 1200
+        - clickSelector: .case-if-step-header
+        - waitMs: 600
+
+REQ-V1.0.1-P6-003:
+  ui: true
+  description: 用例管理 — for 循环中断条件
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-003.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/cases?caseId={fixture.caseId}
+        - waitMs: 1200
+        - clickSelector: .case-for-step-header
+        - waitMs: 600
+
+REQ-V1.0.1-P6-004:
+  ui: true
+  description: 用例管理 — 断言失败中断（失败阻塞）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-004.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/cases?caseId={fixture.caseId}
+        - waitMs: 1200
+        - clickText: 接口请求
+        - waitMs: 400
+        - clickText: 断言
+        - waitMs: 500
+
+REQ-V1.0.1-P6-005:
+  ui: true
+  description: 用例管理 — 批量标签
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-005.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/cases
+        - waitMs: 800
+        - clickText: "{fixture.caseModuleName}"
+        - waitMs: 400
+        - clickFirstCheckbox: true
+        - waitMs: 300
+        - clickText: 标签
+        - waitMs: 500
+
+REQ-V1.0.1-P6-006:
+  ui: true
+  description: 用例管理 — 运行环境 Tooltip
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-006.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/cases?caseId={fixture.caseId}
+        - waitMs: 1200
+        - hoverText: SIT
+        - waitMs: 800
+
+REQ-V1.0.1-P6-007:
+  ui: true
+  description: 用例调试 — 运行结果详情 Drawer
+  shots:
+    - id: drawer
+      file: REQ-V1.0.1-P6-007-drawer.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/cases?caseId={fixture.caseId}
+        - waitMs: 1200
+        - clickButton: 调 试
+        - waitMs: 2200
+
+REQ-V1.0.1-P6-008:
+  ui: true
+  description: 测试运行 — 测试报告用例详情 Drawer
+  shots:
+    - id: drawer
+      file: REQ-V1.0.1-P6-008-drawer.png
+      steps:
+        - goto: /version-dev/{fixture.projectId}/{fixture.versionId}/runs/{fixture.testRunId}
+        - waitMs: 800
+        - clickText: 测试报告
+        - waitMs: 800
+        - clickSelector: .report-case-name-link
+        - waitMs: 600
+
+REQ-V1.0.1-P6-009:
+  ui: true
+  description: 平台自动化 — 任务报告用例详情 Drawer
+  shots:
+    - id: drawer
+      file: REQ-V1.0.1-P6-009-drawer.png
+      steps:
+        - goto: /application/platform/tasks/{fixture.platformTaskId}
+        - waitMs: 600
+        - clickText: 测试报告
+        - waitMs: 800
+        - clickSelector: .report-case-name-link
+        - waitMs: 600
+
+# ── 010～025 项目日&周报（新增）────────────────────────────────
+
+REQ-V1.0.1-P6-010:
+  ui: true
+  description: 项目日报 — 新建弹窗
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-010.png
+      steps:
+        - goto: /tools/project-reports?tab=daily
+        - waitMs: 800
+        - clickText: 新建日报
+        - waitMs: 500
+
+REQ-V1.0.1-P6-011:
+  ui: true
+  description: 项目日报 — 列表与操作列
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-011.png
+      steps:
+        - goto: /tools/project-reports?tab=daily
+        - waitMs: 1000
+
+REQ-V1.0.1-P6-012:
+  ui: true
+  description: 项目日报 — 编辑弹窗
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-012.png
+      steps:
+        - goto: /tools/project-reports?tab=daily
+        - waitMs: 800
+        - clickSelectorFirst: "tr.ant-table-row .anticon-edit"
+        - waitMs: 600
+
+REQ-V1.0.1-P6-013:
+  ui: true
+  description: 项目日报 — 详情预览态
+  shots:
+    - id: preview
+      file: REQ-V1.0.1-P6-013-preview.png
+      steps:
+        - goto: /tools/project-reports/{fixture.dailyReportConfigId}
+        - waitMs: 1000
+
+REQ-V1.0.1-P6-014:
+  ui: true
+  description: 项目日报 — 详情编辑态
+  shots:
+    - id: preview
+      file: REQ-V1.0.1-P6-014-preview.png
+      steps:
+        - goto: /tools/project-reports/{fixture.dailyReportConfigId}
+        - waitMs: 800
+    - id: edit
+      file: REQ-V1.0.1-P6-014-edit.png
+      steps:
+        - goto: /tools/project-reports/{fixture.dailyReportConfigId}
+        - waitMs: 800
+        - clickText: 编辑
+        - waitMs: 600
+
+REQ-V1.0.1-P6-015:
+  ui: true
+  description: 项目日报 — 列表发送邮件操作
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-015.png
+      steps:
+        - goto: /tools/project-reports?tab=daily
+        - waitMs: 800
+        - clickSelectorFirst: "tr.ant-table-row .anticon-mail"
+        - waitMs: 400
+
+REQ-V1.0.1-P6-016:
+  ui: true
+  description: 项目日报 — 删除操作（列表态）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-016.png
+      steps:
+        - goto: /tools/project-reports?tab=daily
+        - waitMs: 1000
+
+REQ-V1.0.1-P6-017:
+  ui: true
+  description: 项目周报 — 表格与添加行
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-017.png
+      steps:
+        - goto: /tools/project-reports?tab=weekly
+        - waitMs: 1000
+
+REQ-V1.0.1-P6-018:
+  ui: true
+  description: 项目周报 — 单元格内联编辑
+  shots:
+    - id: edit
+      file: REQ-V1.0.1-P6-018-edit.png
+      steps:
+        - goto: /tools/project-reports?tab=weekly
+        - waitForSelector: ".ant-tabs-tabpane-active .ant-table-tbody .ant-input"
+        - clickSelector: ".ant-tabs-tabpane-active .ant-table-tbody .ant-input"
+        - waitMs: 600
+
+REQ-V1.0.1-P6-019:
+  ui: true
+  description: 项目周报 — 行删除
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-019.png
+      steps:
+        - goto: /tools/project-reports?tab=weekly
+        - waitMs: 1000
+
+REQ-V1.0.1-P6-020:
+  ui: true
+  description: 项目周报 — 提交
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-020.png
+      steps:
+        - goto: /tools/project-reports?tab=weekly
+        - waitMs: 800
+
+REQ-V1.0.1-P6-021:
+  ui: false
+  description: 周报未填提醒 — 后台任务，无 UI
+
+REQ-V1.0.1-P6-022:
+  ui: false
+  description: 周报汇总定时发送 — 后台任务，无 UI
+
+REQ-V1.0.1-P6-023:
+  ui: true
+  description: 项目周报 — 历史周只读预览
+  shots:
+    - id: history
+      file: REQ-V1.0.1-P6-023-history.png
+      steps:
+        - goto: /tools/project-reports?tab=weekly
+        - waitForSelector: "button.ant-btn-sm"
+        - clickButton: 上 周
+        - waitMs: 800
+
+REQ-V1.0.1-P6-024:
+  ui: true
+  description: 项目数据汇总统计页
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P6-024.png
+      steps:
+        - goto: /tools/project-reports/statistics
+        - waitMs: 1200
+
+REQ-V1.0.1-P6-025:
+  ui: true
+  description: 项目周报 — 设置 Modal
+  shots:
+    - id: settings
+      file: REQ-V1.0.1-P6-025-settings.png
+      steps:
+        - goto: /tools/project-reports?tab=weekly
+        - waitMs: 800
+        - clickSelectorFirst: ".anticon-setting"
+        - waitMs: 600

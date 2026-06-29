@@ -1,0 +1,147 @@
+{
+  "version": "V1.0.1-P6",
+  "capturedAt": "2026-06-04T10:16:47.752Z",
+  "baseURL": "http://localhost:5173",
+  "outputDir": "docs/prd/V1.0.1-P6/assets/srs-screenshots",
+  "items": [
+    {
+      "reqId": "REQ-V1.0.1-P6-002",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-002.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-002.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-003",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-003.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-003.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-004",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-004.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-004.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-005",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-005.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-005.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-006",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-006.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-006.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-007",
+      "shotId": "drawer",
+      "file": "REQ-V1.0.1-P6-007-drawer.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-007-drawer.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-008",
+      "shotId": "drawer",
+      "file": "REQ-V1.0.1-P6-008-drawer.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-008-drawer.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-009",
+      "shotId": "drawer",
+      "file": "REQ-V1.0.1-P6-009-drawer.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-009-drawer.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-010",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-010.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-010.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-011",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-011.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-011.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-012",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-012.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-012.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-013",
+      "shotId": "preview",
+      "file": "REQ-V1.0.1-P6-013-preview.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-013-preview.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-014",
+      "shotId": "preview",
+      "file": "REQ-V1.0.1-P6-014-preview.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-014-preview.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-014",
+      "shotId": "edit",
+      "file": "REQ-V1.0.1-P6-014-edit.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-014-edit.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-015",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-015.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-015.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-016",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-016.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-016.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-017",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-017.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-017.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-018",
+      "shotId": "edit",
+      "file": "REQ-V1.0.1-P6-018-edit.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-018-edit.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-019",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-019.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-019.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-020",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-020.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-020.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-023",
+      "shotId": "history",
+      "file": "REQ-V1.0.1-P6-023-history.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-023-history.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-024",
+      "shotId": "main",
+      "file": "REQ-V1.0.1-P6-024.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-024.png"
+    },
+    {
+      "reqId": "REQ-V1.0.1-P6-025",
+      "shotId": "settings",
+      "file": "REQ-V1.0.1-P6-025-settings.png",
+      "markdownPath": "assets/srs-screenshots/REQ-V1.0.1-P6-025-settings.png"
+    }
+  ],
+  "errors": []
+}

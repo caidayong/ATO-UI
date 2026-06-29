@@ -1,0 +1,180 @@
+# V1.0.1-P4 SRS 原型截图场景（计划管理 REQ-001～010、035～039、036～038）
+# 执行：npm run srs:screenshots -- --version V1.0.1-P4
+# 占位符 {fixture.xxx} → scripts/srs-screenshots/fixtures.json
+
+# ── 001～010 计划管理（新增）────────────────────────────────
+
+REQ-V1.0.1-P4-001:
+  ui: true
+  description: 计划管理 — 新建计划 Modal
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-001.png
+      steps:
+        - goto: /ptsw/plans?factory=CN
+        - waitMs: 1000
+        - clickButton: 新建计划
+        - waitMs: 600
+
+REQ-V1.0.1-P4-002:
+  ui: true
+  description: 计划管理 — 计划列表（含历史入口）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-002.png
+      steps:
+        - goto: /ptsw/plans?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-003:
+  ui: true
+  description: 计划管理 — 详情软件烧录表（待确认）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-003.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-004:
+  ui: true
+  description: 计划管理 — 变更编辑态
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-004.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanSubmittedId}?mode=changeEdit&factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-005:
+  ui: true
+  description: 计划管理 — 操作日志 Tab
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-005.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 800
+        - clickTab: 操作日志
+        - waitMs: 600
+
+REQ-V1.0.1-P4-006:
+  ui: true
+  description: 计划管理 — 详情三 Tab 查看
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-006.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 1000
+
+REQ-V1.0.1-P4-007:
+  ui: true
+  description: 计划管理 — 生产计划表 Tab（含导出入口）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-007.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 800
+        - clickTab: 生产计划表
+        - waitMs: 600
+
+REQ-V1.0.1-P4-008:
+  ui: true
+  description: 计划管理 — 列表筛选工具栏
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-008.png
+      steps:
+        - goto: /ptsw/plans?factory=CN
+        - waitMs: 1000
+
+REQ-V1.0.1-P4-009:
+  ui: true
+  description: 计划管理 — 软件烧录表（含搜索工具栏）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-009.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-010:
+  ui: true
+  description: 计划管理 — 详情 Tab 结构
+  shots:
+    - id: tabs
+      file: REQ-V1.0.1-P4-010.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 1000
+
+# ── 035～038 计划管理（优化 / 增量）──────────────────────────
+
+REQ-V1.0.1-P4-035:
+  ui: true
+  description: 计划管理 — 烧录表字段（程序名称/checksum/路径）
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-035.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-036:
+  ui: true
+  description: 计划管理 — 履历匹配橙/红标记
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-036.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanPendingId}?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-037:
+  ui: true
+  description: 计划管理 — 匹配异常（BOM 整行标红）
+  shots:
+    - id: list
+      file: REQ-V1.0.1-P4-037-list.png
+      steps:
+        - goto: /ptsw/plans?factory=CN
+        - waitMs: 1000
+    - id: detail
+      file: REQ-V1.0.1-P4-037-detail.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanAbnormalId}?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-038:
+  ui: true
+  description: 计划管理 — 提交弹窗邮件正文预览
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-038.png
+      steps:
+        - goto: /ptsw/plans/{fixture.productionPlanSubmitPreviewId}?factory=CN
+        - waitMs: 1500
+        - clickSelector: '.ant-card button.ant-btn-primary'
+        - waitMs: 800
+        - waitForSelector: '.ant-modal-title'
+        - waitMs: 400
+
+REQ-V1.0.1-P4-039:
+  ui: true
+  description: 计划管理 — 历史计划数据管理
+  shots:
+    - id: main
+      file: REQ-V1.0.1-P4-039.png
+      steps:
+        - goto: /ptsw/plans/history?factory=CN
+        - waitMs: 1200
+
+REQ-V1.0.1-P4-040:
+  ui: false
+  description: 历史计划数据存储 — 后台 NFR，无 UI
+
+REQ-V1.0.1-P4-041:
+  ui: false
+  description: 历史计划数据备份 — 后台 NFR，无 UI
